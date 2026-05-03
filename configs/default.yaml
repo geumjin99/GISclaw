@@ -1,0 +1,31 @@
+# GISclaw default configuration.
+# Most runtime options are overridden by environment variables or by
+# command-line flags on `scripts/run_single_task.py`. This file documents
+# the local llama.cpp backend; when using cloud APIs or Ollama, the
+# values here are ignored.
+
+llm:
+  # Path to a local GGUF model; only used by the llama-cpp engine
+  model_path: "models/qwen2.5-7b-instruct-q4_k_m.gguf"
+  # Context window in tokens
+  n_ctx: 16384
+  # Number of GPU layers (-1 = offload everything to GPU)
+  n_gpu_layers: -1
+  # Sampling temperature
+  temperature: 0.1
+  # Maximum tokens to generate per call
+  max_tokens: 2048
+  # Stop sequences for the ReAct loop
+  stop_sequences:
+    - "Observation:"
+    - "\nUser:"
+
+agent:
+  # Maximum reasoning steps before the loop exits
+  max_steps: 10
+  # Verbose progress output
+  verbose: true
+
+data:
+  base_dir: "data"
+  output_dir: "output"

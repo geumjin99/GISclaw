@@ -1,0 +1,37 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Editor and IDE state
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Environments and secrets
+.env
+.envrc
+*.local
+
+# Run artefacts that should never be committed
+results/
+_codegen_workspace/
+rag_db/
+rag_codegen_db/
+models/
+
+# Logs
+*.log
+nohup.out
+
+# Notebooks
+.ipynb_checkpoints/
+tasks/
