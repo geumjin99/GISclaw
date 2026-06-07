@@ -147,10 +147,12 @@ def get_dataset_info(dataset_name: str) -> str:
     """"""
     try:
         gdf = _get_dataset(dataset_name)
+        crs = getattr(gdf, "crs", None)
+        has_geometry = "geometry" in getattr(gdf, "columns", [])
 
         col_info = []
         for col in gdf.columns:
-            if col == "geometry":
+            if col == "geometry" and has_geometry:
                 col_info.append(f"  - geometry ({gdf.geometry.geom_type.unique().tolist()})")
             else:
                 dtype = str(gdf[col].dtype)
@@ -162,7 +164,7 @@ def get_dataset_info(dataset_name: str) -> str:
         info = (
             f"Dataset '{dataset_name}':\n"
             f"  Rows: {len(gdf)}\n"
-            f"  CRS: {gdf.crs}\n"
+            f"  CRS: {crs if crs is not None else 'none (attribute table)'}\n"
             f"  Columns:\n" + "\n".join(col_info)
         )
 
