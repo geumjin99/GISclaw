@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GISclaw — GIS Analyst Agent</title>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <link rel="stylesheet" href="style.css?v=12" />
+</head>
+<body>
+  <div class="app">
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6.5 12 3l9 3.5v11L12 21l-9-3.5v-11Z" />
+          <path d="M12 3v18" /><path d="m3 6.5 9 4 9-4" /><path d="M3 17.5l9-4 9 4" />
+        </svg>
+        <div class="brand-text">
+          <div class="brand-name">GISclaw</div>
+          <div class="brand-sub">GIS Analyst Agent</div>
+        </div>
+      </div>
+      <div class="status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Idle</span>
+      </div>
+    </header>
+
+    <!-- Menu bar (desktop-GIS style) -->
+    <nav class="menubar" id="menubar">
+      <div class="menu" data-menu="project">
+        <button class="menu-btn" type="button">Project</button>
+        <div class="menu-drop">
+          <div class="menu-item" data-act="new">＋ New project…</div>
+          <div class="menu-item" data-act="adddata">＋ Add data…</div>
+          <div class="menu-sep"></div>
+          <div class="menu-item" data-act="log">Log (compacted)…</div>
+          <div class="menu-item" data-act="journal">Journal (full record)…</div>
+          <div class="menu-item" data-act="note">Add note to journal…</div>
+          <div class="menu-item" data-act="newthread">Start a new conversation</div>
+        </div>
+      </div>
+      <div class="menu" data-menu="tools">
+        <button class="menu-btn" type="button">Tools</button>
+        <div class="menu-drop">
+          <div class="menu-item" data-act="toolbox">Toolbox…</div>
+        </div>
+      </div>
+      <div class="menu" data-menu="settings">
+        <button class="menu-btn" type="button">Settings</button>
+        <div class="menu-drop">
+          <div class="menu-item" data-act="set-keys">API keys…</div>
+          <div class="menu-item" data-act="set-models">Models…</div>
+          <div class="menu-item" data-act="set-skills">Skills…</div>
+          <div class="menu-item" data-act="set-memory">Memory…</div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- 3-pane workspace -->
+    <main class="workspace">
+      <!-- Left: projects -->
+      <aside class="panel panel-left">
+        <div class="panel-head">
+          <div class="panel-title">Projects</div>
+        </div>
+        <div class="tree" id="catalog"><!-- filled by app.js --></div>
+        <div class="side-foot">
+          <!-- Actions moved to the top menu bar. Buttons kept (hidden) so their handlers still wire up. -->
+          <button class="foot-btn" id="btnNewProject" title="Create a new project" hidden>＋ New</button>
+          <button class="foot-btn" id="btnAddData" disabled title="Add data to the selected project" hidden>＋ Add data…</button>
+          <button class="foot-btn" id="btnToolbox" disabled title="Run GIS operations directly" hidden>Toolbox…</button>
+          <div class="foot-line" id="footHint">Use the <b>Project</b> menu above to create a project and add data.</div>
+        </div>
+      </aside>
+
+      <!-- Drag to resize the projects panel -->
+      <div class="splitter" id="splitLeft" title="Drag to resize · double-click to reset"></div>
+
+      <!-- Center: viewer (map / code / result image) -->
+      <section class="panel panel-center">
+        <div class="viewer-tabs">
+          <button class="tab active" data-tab="map">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7 6-3 6 3 6-3v13l-6 3-6-3-6 3V7Z"/><path d="M9 4v13M15 7v13"/></svg>
+            <span>Map</span>
+          </button>
+          <button class="tab" data-tab="code">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/><path d="M13 4 11 20"/></svg>
+            <span>Code</span>
+          </button>
+          <button class="tab" data-tab="data" id="dataTab" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+            <span>Table</span>
+          </button>
+          <button class="tab" data-tab="image" id="imageTab" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-7 7"/></svg>
+            <span>Result</span>
+          </button>
+          <div class="tabs-spacer"></div>
+          <div class="viewer-meta" id="viewerMeta">
+            <span class="meta-key">Project</span><span class="meta-val" id="regionVal">—</span>
+          </div>
+          <div class="viewer-actions">
+            <button class="ghost-btn" id="btnZoomIn" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+            <button class="ghost-btn" id="btnZoomOut" title="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+            <button class="ghost-btn" id="btnFit" title="Fit to data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/></svg></button>
+          </div>
+        </div>
+
+        <!-- Map -->
+        <div class="viewer-body" id="mapView">
+          <div class="map-canvas-wrap" id="mapWrap">
+            <div id="mapLeaflet"></div>
+            <div class="map-compass">N</div>
+          </div>
+          <aside class="legend" id="legend">
+            <div class="legend-title">Map layers</div>
+            <div class="legend-layers" id="legendLayers"></div>
+            <div class="legend-hint">Click a dataset on the left to show it here.</div>
+          </aside>
+        </div>
+
+        <!-- Tabular / text output (csv, txt, json, md) -->
+        <div class="viewer-body hidden" id="dataView">
+          <div class="data-wrap">
+            <div class="data-chrome">
+              <span class="image-filename" id="dataFilename">—</span>
+              <span class="image-meta" id="dataMeta"></span>
+              <span class="ca-spacer"></span>
+              <input class="text-input data-filter" id="dataFilter" placeholder="Filter rows…" spellcheck="false" />
+              <button class="mini-btn" id="dataRaw">Raw text</button>
+            </div>
+            <div class="data-stage" id="dataStage"></div>
+          </div>
+        </div>
+
+        <!-- Result image -->
+        <div class="viewer-body hidden" id="imageView">
+          <div class="image-wrap">
+            <div class="image-chrome">
+              <span class="image-filename" id="imageFilename">—</span>
+              <span class="image-meta" id="imageMeta"></span>
+            </div>
+            <div class="image-stage"><img id="imageEl" alt="Analysis result" /></div>
+          </div>
+        </div>
+
+        <!-- Code -->
+        <div class="viewer-body hidden" id="codeView">
+          <div class="code-chrome">
+            <div class="code-file-tabs"><div class="code-file-tab active" id="codeFileName">analysis.py</div></div>
+            <div class="code-run-controls">
+              <span class="code-run-state" id="codeRunState">Ready</span>
+            </div>
+          </div>
+          <div class="code-area">
+            <pre class="code-gutter" id="codeGutter"></pre>
+            <pre class="code-lines" id="codeLines"></pre>
+          </div>
+          <div class="code-output" id="codeOutput">
+            <div class="code-output-head">Execution output</div>
+            <div class="code-output-body" id="codeOutputBody">
+              <span class="out-muted">Output appears here as the agent runs code.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="center-footer">
+          <span class="fx" id="stepCount">Steps · 0</span>
+          <span class="fx-sep"></span>
+          <span class="fx" id="selfCorrCount">Self-corrections · 0</span>
+          <span class="fx-sep"></span>
+          <span class="fx" id="timerCount">Elapsed · 00:00</span>
+        </div>
+      </section>
+
+      <!-- Drag to resize the conversation panel -->
+      <div class="splitter" id="splitRight" title="Drag to resize · double-click to reset"></div>
+
+      <!-- Right: conversation -->
+      <aside class="panel panel-right">
+        <div class="chat-head">
+          <div class="chat-title-row">
+            <span class="chat-h-title" id="chatTaskTitle">No project selected</span>
+            <span class="chat-h-badge">AI analyst</span>
+          </div>
+          <div class="chat-h-sub">Describe the analysis, pick a model, then press Run.</div>
+        </div>
+
+        <div class="chat-scroll" id="chatScroll">
+          <div class="msg msg-system">
+            <div class="msg-meta"><span class="agent-tag">Info</span><span class="ts"></span></div>
+            <div class="msg-body">Create a project on the left, add your GIS data, then describe an analysis and press <b>Run</b>.</div>
+          </div>
+        </div>
+
+        <div class="chat-compose">
+          <div class="textarea-wrap">
+            <textarea id="promptInput" rows="4" spellcheck="false" placeholder="e.g. Compute building density per block and map it."></textarea>
+          </div>
+          <div class="compose-actions">
+            <select id="modelSelect" class="model-select" title="Model"></select>
+            <span class="ca-spacer"></span>
+            <button class="reset-btn" id="resetBtn" title="Clear the view">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+              <span>Clear</span>
+            </button>
+            <button class="primary-btn" id="startBtn" disabled>
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4.5v15l13-7.5L6 4.5Z"/></svg>
+              <span>Run</span>
+            </button>
+            <button class="secondary-btn hidden" id="stopBtn">
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+              <span>Stop</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- File browser modal (server-side, rooted at the mounted workspace) -->
+  <div class="modal-overlay hidden" id="browseModal">
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title" id="browseTitle">Add data</span>
+        <button class="modal-close" id="browseClose">✕</button>
+      </div>
+      <div class="modal-sub">
+        Pick files or folders from the workspace. They are copied into the project's <code>data/</code>.
+      </div>
+      <div class="browse-path" id="browsePath"></div>
+      <div class="browse-list" id="browseList"></div>
+      <div class="modal-foot">
+        <span class="browse-count" id="browseCount">0 selected</span>
+        <span class="ca-spacer"></span>
+        <button class="reset-btn" id="browseCancel"><span>Cancel</span></button>
+        <button class="primary-btn" id="browseAttach"><span>Attach selected</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New project modal -->
+  <div class="modal-overlay hidden" id="newModal">
+    <div class="modal modal-sm">
+      <div class="modal-head">
+        <span class="modal-title">New project</span>
+        <button class="modal-close" id="newClose">✕</button>
+      </div>
+      <div class="modal-sub">A project is a working folder holding your data, outputs, and run history.</div>
+      <input class="text-input" id="newName" placeholder="Project name" />
+      <div class="modal-foot">
+        <span class="ca-spacer"></span>
+        <button class="reset-btn" id="newCancel"><span>Cancel</span></button>
+        <button class="primary-btn" id="newCreate"><span>Create</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbox: the deterministic operation catalog (run directly or hand to the agent) -->
+  <div class="modal-overlay hidden" id="toolModal">
+    <div class="modal modal-lg">
+      <div class="modal-head">
+        <span class="modal-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2 2 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>Toolbox</span></span>
+        <button class="modal-close" id="toolClose">✕</button>
+      </div>
+      <div class="modal-sub">Run a GIS operation directly (deterministic, no AI cost) — or insert it as a request for the agent.</div>
+      <div class="tool-body">
+        <div class="tool-list" id="toolList"></div>
+        <div class="tool-form" id="toolForm"><div class="tool-empty">Select an operation on the left.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attribute table (right-click a map layer → Attribute table) -->
+  <div class="modal-overlay hidden" id="attrModal">
+    <div class="modal modal-lg">
+      <div class="modal-head">
+        <span class="modal-title" id="attrTitle">Attribute table</span>
+        <button class="modal-close" id="attrClose">✕</button>
+      </div>
+      <div class="attr-toolbar">
+        <input class="text-input" id="attrFilter" placeholder="Query — filter rows by any field…" spellcheck="false" />
+        <span class="attr-count" id="attrCount"></span>
+      </div>
+      <div class="attr-table-wrap"><table class="attr-table" id="attrTable"></table></div>
+    </div>
+  </div>
+
+  <!-- Settings: API keys, model registry, memory -->
+  <div class="modal-overlay hidden" id="setModal">
+    <div class="modal modal-lg">
+      <div class="modal-head">
+        <span class="modal-title">Settings</span>
+        <button class="modal-close" id="setClose">✕</button>
+      </div>
+      <div class="set-tabs">
+        <button class="set-tab active" data-pane="keys">API keys</button>
+        <button class="set-tab" data-pane="models">Models</button>
+        <button class="set-tab" data-pane="skills">Skills</button>
+        <button class="set-tab" data-pane="memory">Memory</button>
+      </div>
+
+      <div class="set-pane" id="paneKeys">
+        <div class="modal-sub">
+          Keys are stored on the server in <code id="setPath">…</code> (file mode 600) and
+          survive container rebuilds. They are never sent back to this page — only a mask is.
+        </div>
+        <div class="prov-list" id="provList"></div>
+      </div>
+
+      <div class="set-pane hidden" id="paneModels">
+        <div class="modal-sub">
+          Only enabled models with a configured key appear in the run selector.
+          Any OpenAI-compatible endpoint works — pick the <b>Custom</b> provider and give its base URL.
+        </div>
+        <div class="model-list" id="modelList"></div>
+
+        <div class="model-discover">
+          <div class="ma-title">What your providers are serving right now</div>
+          <div class="disc-bar">
+            <select class="model-select" id="discProvider"></select>
+            <button class="mini-btn primary" id="discFetch">Fetch model list</button>
+            <span class="tf-status" id="discStatus"></span>
+          </div>
+          <div class="disc-list" id="discList"></div>
+        </div>
+
+        <div class="model-add" id="modelAdd">
+          <div class="ma-title">Add / edit a model</div>
+          <div class="ma-grid">
+            <label>Id<input class="text-input" id="maId" placeholder="qwen-max" /></label>
+            <label>Display name<input class="text-input" id="maDisplay" placeholder="Qwen Max" /></label>
+            <label>Provider<select class="model-select" id="maProvider"></select></label>
+            <label>API model name<input class="text-input" id="maModelName" placeholder="qwen-max-2025-01-25" /></label>
+            <label>Base URL <span class="ma-hint">(custom provider only)</span><input class="text-input" id="maBaseUrl" placeholder="https://host/v1" /></label>
+            <label>Max rounds<input class="text-input" id="maRounds" type="number" value="50" /></label>
+            <label>Max tokens<input class="text-input" id="maTokens" type="number" value="4096" /></label>
+            <label>Cost in / out per 1M
+              <span class="ma-pair"><input class="text-input" id="maCostIn" type="number" step="0.01" value="0" /><input class="text-input" id="maCostOut" type="number" step="0.01" value="0" /></span>
+            </label>
+          </div>
+          <div class="ma-actions">
+            <span class="tf-status" id="maStatus"></span>
+            <span class="ca-spacer"></span>
+            <button class="reset-btn" id="maReset"><span>Clear form</span></button>
+            <button class="primary-btn" id="maSave"><span>Save model</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-pane hidden" id="paneSkills">
+        <div class="modal-sub">
+          A skill is a <b>directory bundle</b> — <code>SKILL.md</code> (a short router) plus
+          <code>references/</code>, <code>assets/</code>, <code>manifest.yaml</code>. Same shape as
+          Claude Code skills, so bundles are interchangeable. Only the one-line description is
+          always in context; the router and its references load on demand.
+        </div>
+        <div class="skill-roots" id="skillRoots"></div>
+        <label class="mem-toggle"><input type="checkbox" id="skillAuto" />
+          <span>Auto-load the best-matching skill for each task
+            <i>(models rarely open one themselves)</i></span></label>
+        <div class="skill-list" id="skillList"></div>
+        <div class="skill-foot">
+          <span class="tf-status" id="skillStatus"></span>
+          <span class="ca-spacer"></span>
+          <input class="text-input" id="skillNewName" placeholder="new-skill-name" />
+          <button class="mini-btn primary" id="skillNew">New</button>
+          <button class="mini-btn" id="skillImportZip">Import .zip</button>
+          <input type="file" id="skillZipFile" accept=".zip" hidden />
+        </div>
+        <div class="skill-foot">
+          <input class="text-input" id="skillImportPath" placeholder="…or a folder path under the workspace, e.g. _incoming/my-skill" />
+          <button class="mini-btn" id="skillImportGo">Import folder</button>
+        </div>
+        <div class="skill-editor hidden" id="skillEditor">
+          <div class="se-head">
+            <span class="se-title" id="seTitle">—</span>
+            <span class="ca-spacer"></span>
+            <button class="mini-btn" id="seClose">Close</button>
+            <button class="mini-btn primary" id="seSave">Save</button>
+          </div>
+          <div class="se-note" id="seNote"></div>
+          <div class="se-files" id="seFiles"></div>
+          <textarea class="mem-text" id="seText" spellcheck="false"></textarea>
+          <pre class="se-preview hidden" id="sePreview"></pre>
+        </div>
+      </div>
+
+      <div class="set-pane hidden" id="paneMemory">
+        <div class="modal-sub">
+          Standing preferences applied to <b>every</b> project — cartography, deliverable
+          conventions, house CRS. Injected into the agent's system prompt at the start of each run.
+          Stored in <code id="memPath">…</code>.
+        </div>
+        <label class="mem-toggle"><input type="checkbox" id="memEnabled" /> <span>Apply memory to runs</span></label>
+        <textarea id="memText" class="mem-text" spellcheck="false"></textarea>
+        <div class="modal-foot">
+          <span class="tf-status" id="memStatus"></span>
+          <span class="ca-spacer"></span>
+          <button class="primary-btn" id="memSave"><span>Save memory</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project journal (the durable, human-readable record) -->
+  <div class="modal-overlay hidden" id="journalModal">
+    <div class="modal modal-lg">
+      <div class="modal-head">
+        <span class="modal-title" id="journalTitle">Journal</span>
+        <button class="modal-close" id="journalClose">✕</button>
+      </div>
+      <div class="modal-sub">
+        Append-only record of this project: every run, what was asked, what it produced.
+        Lives at <code id="journalPath">…</code> — readable without this app.
+      </div>
+      <div class="journal-body" id="journalBody"></div>
+      <div class="modal-foot">
+        <span class="ca-spacer"></span>
+        <button class="reset-btn" id="journalNote"><span>Add a note</span></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=12"></script>
+</body>
+</html>

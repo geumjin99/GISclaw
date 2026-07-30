@@ -1,0 +1,36 @@
+# GISclaw product image — Python deps installed on top of the GDAL base image.
+# The heavy GIS libs (geopandas/rasterio/fiona/GDAL) come from the conda base
+# (see Dockerfile); this file is the pip layer: web server, cloud SDKs, and the
+# analysis packages the agent's generated code commonly needs.
+
+# --- Web server ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+sse-starlette>=1.8
+
+# --- Cloud LLM SDKs (single-agent product uses cloud models only) ---
+openai>=1.30
+anthropic>=0.34
+
+# --- Core config / templating (used across src/agent) ---
+pyyaml>=6.0
+jinja2>=3.1
+rich>=13.0
+
+# --- Analysis stack the sandbox exposes to generated code ---
+# (geopandas, rasterio, shapely, pyproj, fiona come from conda in the image)
+numpy>=1.24
+pandas>=2.1
+scipy>=1.11
+matplotlib>=3.8
+seaborn>=0.13
+scikit-learn>=1.3
+rasterstats>=0.19
+mapclassify>=2.6
+networkx>=3.2
+libpysal>=4.9
+esda>=2.5
+momepy>=0.7
+h3>=3.7
+osmnx>=1.9
+openpyxl>=3.1

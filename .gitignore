@@ -1,0 +1,34 @@
+# Runtime state — never publish
+.env
+projects/
+!projects/.gitkeep
+
+# Secrets and per-install config
+**/.gisclaw/
+*.key
+*.pem
+
+# Logs and run artifacts
+*.log
+app/server.log
+**/runs/
+**/pred_results/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# LaTeX build artifacts
+docs/manual/*.aux
+docs/manual/*.log
+docs/manual/*.out
+docs/manual/*.toc
+docs/manual/*.tex

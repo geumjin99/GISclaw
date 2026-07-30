@@ -1,0 +1,33 @@
+# GISclaw — one-command launch.
+#
+#   1. cp .env.example .env      (optional — keys can also be set in the UI)
+#   2. docker compose up -d
+#   3. open http://localhost:8765
+#
+# The host ./projects folder is mounted as /workspace inside the container, so
+# the in-app file browser sees exactly what you put there, and every project you
+# create — its data/, outputs/, runs/, JOURNAL.md, LOG.md — lives on the host.
+# Nothing is lost when the container stops, and API keys you set in the UI are
+# stored under ./projects/.gisclaw/ (mode 600), never inside the image.
+services:
+  gisclaw:
+    build: .
+    image: gisclaw:latest
+    container_name: gisclaw_app
+    ports:
+      - "8765:8765"
+    env_file:
+      - .env
+    volumes:
+      - ./projects:/workspace
+    restart: unless-stopped
+
+# ---------------------------------------------------------------------------
+# Developing on GISclaw itself? Add these two mounts for live reload:
+#
+#     - ./app:/app/app          # front-end edits land on a browser refresh
+#     - ./src:/app/src:ro       # agent-core edits need only `docker restart`
+#
+# Do NOT mount a personal skills folder (e.g. ~/.claude/skills) here — those
+# bundles are third-party content. Use GISCLAW_EXTRA_SKILLS for local-only use.
+# ---------------------------------------------------------------------------
