@@ -1,8 +1,11 @@
 # GISclaw — one-command launch.
 #
-#   1. cp .env.example .env      (optional — keys can also be set in the UI)
-#   2. docker compose up -d
-#   3. open http://localhost:8765
+#   1. docker compose up -d
+#   2. open http://localhost:8765
+#   3. Settings → API keys… and paste a key
+#
+# No .env is needed: keys go in through the interface. Copy .env.example to
+# .env only if you would rather supply them from the environment.
 #
 # The host ./projects folder is mounted as /workspace inside the container, so
 # the in-app file browser sees exactly what you put there, and every project you
@@ -17,7 +20,10 @@ services:
     ports:
       - "8765:8765"
     env_file:
-      - .env
+      # Genuinely optional. Requires Docker Compose 2.24 or newer; on older
+      # versions this entry still demands the file, so create an empty .env.
+      - path: .env
+        required: false
     volumes:
       - ./projects:/workspace
     restart: unless-stopped

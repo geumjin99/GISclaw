@@ -73,7 +73,7 @@ Typical requests look like this:
 ## Getting started
 
 ```bash
-git clone <this repository>
+git clone https://github.com/geumjin99/GISclaw.git
 cd GISclaw
 docker compose up -d
 # open http://localhost:8765
@@ -346,7 +346,7 @@ GeoJSON 图层、排序 CSV 和图件。
 ## 开始使用
 
 ```bash
-git clone <本仓库>
+git clone https://github.com/geumjin99/GISclaw.git
 cd GISclaw
 docker compose up -d
 # 打开 http://localhost:8765
@@ -581,7 +581,7 @@ GISclaw는 도메인 연구자가 실제로 말하는 형태의 요청을 그대
 ## 시작하기
 
 ```bash
-git clone <이 저장소>
+git clone https://github.com/geumjin99/GISclaw.git
 cd GISclaw
 docker compose up -d
 # http://localhost:8765 열기
