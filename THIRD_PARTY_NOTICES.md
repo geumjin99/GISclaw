@@ -1,7 +1,16 @@
 # Third-party notices
 
-GISclaw is MIT-licensed (see `LICENSE`). It bundles or depends on the
-third-party material listed below, each under its own licence.
+GISclaw is licensed under the **GNU Affero General Public License v3.0 or
+later** (see `LICENSE`); copyright (C) 2026 Han Jinzhen (see `COPYRIGHT`). It
+bundles or depends on the third-party material listed below, each under its own
+licence.
+
+**Licence compatibility.** Every bundled component is under a permissive licence
+that is one-way compatible with the AGPLv3 — Apache-2.0 (per GPLv3 §7 and the
+FSF's compatibility list), BSD-2-Clause, and ISC. Combining them into this
+AGPL-licensed work is permitted; their own notices and licence texts are
+preserved as required, and each remains under its original terms when taken
+separately.
 
 ---
 

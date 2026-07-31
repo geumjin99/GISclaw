@@ -12,7 +12,8 @@ layers, the maps, the tables, and a written account of how it got there.
 </p>
 
 <p>
-<a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-informational.svg"></a>
+<a href="LICENSE"><img alt="License: AGPL v3" src="https://img.shields.io/badge/License-AGPL%20v3-informational.svg"></a>
+<a href="COMMERCIAL-LICENSE.md"><img alt="Commercial licence available" src="https://img.shields.io/badge/commercial%20licence-available-6E7B8B.svg"></a>
 <a href="https://doi.org/10.48550/arXiv.2603.26845"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2603.26845-b31b1b.svg"></a>
 <img alt="Docker" src="https://img.shields.io/badge/run-docker%20compose%20up-2496ED.svg">
 <img alt="Python" src="https://img.shields.io/badge/stack-GeoPandas%20%C2%B7%20rasterio%20%C2%B7%20scikit--learn-3776AB.svg">
@@ -286,9 +287,29 @@ The bundled example dataset carries its own citation requirement — see
 
 ## Licence
 
-MIT for this software (`LICENSE`). Bundled third-party material — the example
-dataset (Apache-2.0), Leaflet, Lucide, OpenStreetMap and CARTO tiles — is listed
-with its licences in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Copyright (C) 2026 Han Jinzhen. GISclaw is free software under the
+**GNU Affero General Public License v3.0 or later** ([`LICENSE`](LICENSE),
+[`COPYRIGHT`](COPYRIGHT)).
+
+Use it for anything, including commercially, at no cost. The one condition: if
+you distribute a modified version — **or run one as a network service others
+use** (AGPL §13) — you must offer those users your version's complete source
+under the AGPL as well. Running it unmodified, or modifying it only for your own
+internal use, obliges you to publish nothing.
+
+If that does not work for you — embedding GISclaw in a proprietary product, or
+operating a closed-source hosted service — a **commercial licence** is available
+from the copyright holder: [`COMMERCIAL-LICENSE.md`](COMMERCIAL-LICENSE.md).
+Contributions are covered by [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+The research code behind the paper stays **MIT** on the `paper-v2` branch and at
+tag `v2-gsis-submission`, so published results remain reproducible under the
+terms the paper cites. Releases made before 2026-07-31 were MIT and remain so —
+this licence change applies to later versions only.
+
+Bundled third-party material — the example dataset (Apache-2.0), Leaflet,
+Lucide, OpenStreetMap and CARTO tiles — is listed with its licences in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 <div align="right"><a href="#gisclaw">▲ back to top</a></div>
 
@@ -507,9 +528,23 @@ GISclaw 会先判断收到的是哪一类消息,再决定怎么响应。因此�
 
 ## 许可
 
-本软件为 MIT(`LICENSE`)。内置第三方材料 —— 示例数据(Apache-2.0)、Leaflet、Lucide、
-OpenStreetMap 与 CARTO 瓦片 —— 的许可见
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+Copyright (C) 2026 Han Jinzhen。GISclaw 是自由软件,采用
+**GNU Affero 通用公共许可证 v3.0 或更高版本**([`LICENSE`](LICENSE)、[`COPYRIGHT`](COPYRIGHT))。
+
+你可以免费用于任何用途,**包括商业用途**。唯一的条件是:如果你分发修改过的版本,
+**或把修改过的版本作为网络服务提供给他人使用**(AGPL 第 13 条),就必须同样以 AGPL
+向这些用户提供你那份的完整源码。原样运行、或仅为自己内部使用而修改,不产生任何公开义务。
+
+如果这不适合你 —— 例如要把 GISclaw 嵌入闭源产品,或运营闭源的托管服务 —— 可向著作权人
+获取**商业许可**:[`COMMERCIAL-LICENSE.md`](COMMERCIAL-LICENSE.md)。
+贡献代码请见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+
+论文对应的研究代码仍为 **MIT**,保留在 `paper-v2` 分支与 tag `v2-gsis-submission` 上,
+以保证已发表结果可按论文所引用的条款复现。2026-07-31 之前发布的版本为 MIT 且继续有效 ——
+本次许可变更仅对之后的版本生效。
+
+内置第三方材料 —— 示例数据(Apache-2.0)、Leaflet、Lucide、OpenStreetMap 与 CARTO 瓦片 ——
+的许可见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 
 <div align="right"><a href="#gisclaw">▲ 回到顶部</a></div>
 
@@ -742,8 +777,27 @@ Skill은 특정 유형의 분석을 어떻게 수행할지 담은 **디렉터리
 
 ## 라이선스
 
-본 소프트웨어는 MIT(`LICENSE`)입니다. 포함된 서드파티 자료 — 예제 데이터셋(Apache-2.0),
-Leaflet, Lucide, OpenStreetMap 및 CARTO 타일 — 의 라이선스는
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) 에 정리되어 있습니다.
+Copyright (C) 2026 Han Jinzhen. GISclaw는 **GNU Affero General Public License
+v3.0 이상**([`LICENSE`](LICENSE), [`COPYRIGHT`](COPYRIGHT))으로 배포되는 자유
+소프트웨어입니다.
+
+**상업적 이용을 포함하여** 어떤 목적으로든 무료로 사용할 수 있습니다. 조건은 하나입니다.
+수정한 버전을 배포하거나, **수정한 버전을 네트워크 서비스로 제공하는 경우**(AGPL 제13조),
+해당 사용자에게 그 버전의 완전한 소스를 동일하게 AGPL로 제공해야 합니다. 수정 없이
+실행하거나 내부 용도로만 수정하는 경우에는 공개 의무가 발생하지 않습니다.
+
+이 조건을 수용하기 어려운 경우 — 예를 들어 GISclaw를 독점 제품에 내장하거나 비공개
+호스팅 서비스로 운영하려는 경우 — 저작권자로부터 **상용 라이선스**를 받을 수 있습니다:
+[`COMMERCIAL-LICENSE.md`](COMMERCIAL-LICENSE.md). 기여는
+[`CONTRIBUTING.md`](CONTRIBUTING.md)를 참조하십시오.
+
+논문에 해당하는 연구 코드는 `paper-v2` 브랜치와 태그 `v2-gsis-submission`에서 **MIT**로
+유지되어, 발표된 결과가 논문이 인용한 조건 그대로 재현 가능합니다. 2026-07-31 이전에
+공개된 릴리스는 MIT이며 그대로 유효합니다 — 이번 라이선스 변경은 이후 버전에만
+적용됩니다.
+
+포함된 서드파티 자료 — 예제 데이터셋(Apache-2.0), Leaflet, Lucide, OpenStreetMap 및
+CARTO 타일 — 의 라이선스는 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) 에
+정리되어 있습니다.
 
 <div align="right"><a href="#gisclaw">▲ 맨 위로</a></div>

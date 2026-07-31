@@ -1,4 +1,19 @@
 <!DOCTYPE html>
+<!--
+  GISclaw — an LLM agent for geospatial analysis.
+  Copyright (C) 2026 Han Jinzhen
+
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+  This file is part of GISclaw. GISclaw is free software: you can redistribute
+  it and/or modify it under the terms of the GNU Affero General Public License
+  as published by the Free Software Foundation, either version 3 of the
+  License, or (at your option) any later version. It is distributed in the hope
+  that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+  warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  Affero General Public License in the LICENSE file, or
+  <https://www.gnu.org/licenses/>, for more details.
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -6,7 +21,7 @@
   <title>GISclaw — GIS Analyst Agent</title>
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js"></script>
-  <link rel="stylesheet" href="style.css?v=12" />
+  <link rel="stylesheet" href="style.css?v=13" />
 </head>
 <body>
   <div class="app">
@@ -55,6 +70,12 @@
           <div class="menu-item" data-act="set-models">Models…</div>
           <div class="menu-item" data-act="set-skills">Skills…</div>
           <div class="menu-item" data-act="set-memory">Memory…</div>
+        </div>
+      </div>
+      <div class="menu" data-menu="help">
+        <button class="menu-btn" type="button">Help</button>
+        <div class="menu-drop">
+          <div class="menu-item" data-act="about">About GISclaw &amp; source code…</div>
         </div>
       </div>
     </nav>
@@ -425,6 +446,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

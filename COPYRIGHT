@@ -1,0 +1,72 @@
+GISclaw — an LLM agent for geospatial analysis
+==============================================
+
+Copyright (C) 2026 Han Jinzhen <hanjinzhen9@gmail.com>
+
+
+LICENCE
+-------
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at your
+option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public
+License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+The full licence text is in the file `LICENSE`.
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+
+WHAT THE AGPL MEANS HERE
+------------------------
+
+You may use, study, modify, and redistribute GISclaw — including
+commercially — free of charge.  In return, the AGPL requires that if you
+convey a modified version, **or run a modified version as a network
+service that other people interact with** (section 13), you must make the
+complete corresponding source of your version available to those users
+under this same licence.
+
+Running GISclaw unmodified, or modifying it purely for your own internal
+use without offering it to others over a network, triggers no obligation
+to publish anything.
+
+
+DUAL LICENSING
+--------------
+
+GISclaw is also offered under a separate commercial licence, for people who
+cannot accept the AGPL's reciprocity requirement — for example, embedding it
+in a proprietary product, or running it as a closed-source hosted service.
+Because the copyright sits with one author, both options can be offered at
+once.
+
+See `COMMERCIAL-LICENSE.md`.
+
+
+PRIOR RELEASES
+--------------
+
+Releases of this repository published before 2026-07-31 were distributed
+under the MIT License.  That grant is perpetual and irrevocable for those
+versions; this change of licence applies to subsequent versions only.
+
+The research code accompanying the GISclaw paper remains under its
+original MIT licence on the `paper-v2` branch and at tag
+`v2-gsis-submission`, so that published results stay reproducible under
+the terms cited in the paper.
+
+
+THIRD-PARTY MATERIAL
+--------------------
+
+This repository bundles third-party material under its own licences —
+see `THIRD_PARTY_NOTICES.md`.

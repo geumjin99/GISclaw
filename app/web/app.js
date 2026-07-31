@@ -1,3 +1,19 @@
+/*
+ * GISclaw — an LLM agent for geospatial analysis.
+ * Copyright (C) 2026 Han Jinzhen
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of GISclaw. GISclaw is free software: you can redistribute
+ * it and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version. It is distributed in the hope
+ * that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Affero General Public License in the LICENSE file, or
+ * <https://www.gnu.org/licenses/>, for more details.
+ */
+
 /* ==========================================================================
    GISclaw product frontend.
    Talks to the FastAPI backend: projects, server-side file browser, and a live
@@ -299,6 +315,7 @@
     else if (act === 'log') openLog();
     else if (act === 'note') { openJournal().then(addJournalNote); }
     else if (act === 'newthread') newThread();
+    else if (act === 'about') openAbout();
   }
   $$('#menubar .menu').forEach(menu => {
     const btn = menu.querySelector('.menu-btn');
@@ -1544,6 +1561,47 @@
       : `<div class="journal-empty">No compacted entries yet — one is written after each analysis run.${res.enabled ? '' : ' (Compaction is currently switched off.)'}</div>`;
     journalModal.classList.remove('hidden');
     body.scrollTop = body.scrollHeight;
+  }
+
+  // Where the source lives, shown in Help → About. If you fork GISclaw and run
+  // it as a service, point this at your own repository — that is what AGPL §13
+  // asks for, and it saves your users hunting for it.
+  const SOURCE_URL = 'https://github.com/geumjin99/GISclaw';
+
+  function openAbout() {
+    $('#journalTitle').textContent = 'About GISclaw';
+    $('#journalPath').textContent = 'AGPL-3.0-or-later';
+    $('#journalBody').innerHTML = mdToHtml([
+      '**GISclaw** — an LLM agent for geospatial analysis.',
+      '',
+      'Copyright (C) 2026 Han Jinzhen',
+      '',
+      'This program is free software under the **GNU Affero General Public',
+      'License, version 3 or later**. It comes with ABSOLUTELY NO WARRANTY.',
+      '',
+      '### Source code',
+      '',
+      `The complete corresponding source is at <${SOURCE_URL}>.`,
+      '',
+      'If you have modified GISclaw and are running it as a service that other',
+      'people use, AGPL section 13 requires you to offer *those* users the source',
+      'of your modified version — replace the link above with yours.',
+      '',
+      '### Commercial licence',
+      '',
+      'Embedding GISclaw in a proprietary product, or running a closed-source',
+      'hosted service, needs a separate commercial licence from the copyright',
+      'holder. See `COMMERCIAL-LICENSE.md`, or contact hanjinzhen9@gmail.com.',
+      '',
+      '### Third-party material',
+      '',
+      'Bundled example data is from GeoAnalystBench (Apache-2.0, Zhang et al.',
+      '2025). Map tiles © CARTO, data © OpenStreetMap contributors (ODbL).',
+      'Leaflet (BSD-2-Clause) and Lucide icons (ISC) are bundled. Full notices',
+      'are in `THIRD_PARTY_NOTICES.md`.',
+    ].join('\n'));
+    journalModal.classList.remove('hidden');
+    $('#journalBody').scrollTop = 0;
   }
 
   async function openJournal() {
