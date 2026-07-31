@@ -915,7 +915,11 @@
   $('#btnUploadFolder').addEventListener('click', () => $('#uploadFolder').click());
   ['#uploadFiles', '#uploadFolder'].forEach(sel =>
     $(sel).addEventListener('change', e => {
-      const fl = e.target.files; e.target.value = ''; uploadLocalFiles(fl);
+      // Copy the list out before resetting the input: input.files is live, so
+      // clearing value would empty the very FileList we are about to send.
+      const files = Array.from(e.target.files || []);
+      e.target.value = '';
+      uploadLocalFiles(files);
     }));
   ['dragenter', 'dragover'].forEach(ev => browseModal.addEventListener(ev, e => {
     e.preventDefault(); browseModal.classList.add('dragging');
