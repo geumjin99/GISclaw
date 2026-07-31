@@ -704,3 +704,7 @@ body.col-resizing iframe, body.col-resizing .leaflet-container { pointer-events:
                line-height:1.45; }
 .modal-overlay.dragging .modal { outline:2px dashed var(--accent);
                                  outline-offset:-6px; }
+
+/* A picked file should look picked, not just have a ticked box. */
+.browse-row { cursor:pointer; }
+.browse-row.picked { background:var(--accent-soft); }

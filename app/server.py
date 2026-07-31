@@ -1408,9 +1408,11 @@ def _raster_overlay_payload(fpath: str) -> dict:
             transform, width, height = calculate_default_transform(
                 src.crs, dst_crs, src.width, src.height, *src.bounds,
                 dst_width=width, dst_height=height)
-        # Three or more bands are treated as RGB; anything else is a single
-        # measured band and gets a colour ramp.
-        bands = [1, 2, 3] if src.count >= 3 else [1]
+        # Exactly three or four bands is ordinary RGB(A) imagery. Anything
+        # else — a single measured band, or a multispectral stack where bands
+        # 1-3 are not red/green/blue — gets a colour ramp instead, which is
+        # honest about not being a photograph.
+        bands = [1, 2, 3] if src.count in (3, 4) else [1]
         stack = []
         for b in bands:
             buf_b = np.full((height, width), np.nan, dtype="float32")

@@ -988,7 +988,16 @@
         if (cb.checked) browseSelected.add(en.rel); else browseSelected.delete(en.rel);
         updateBrowseCount();
       });
-      row.addEventListener('click', () => { if (en.is_dir) loadBrowse(en.rel); });
+      // Clicking anywhere on a file row picks it. Only the checkbox used to
+      // work, which reads as "the file cannot be selected".
+      row.addEventListener('click', () => {
+        if (en.is_dir) { loadBrowse(en.rel); return; }
+        cb.checked = !cb.checked;
+        if (cb.checked) browseSelected.add(en.rel); else browseSelected.delete(en.rel);
+        row.classList.toggle('picked', cb.checked);
+        updateBrowseCount();
+      });
+      row.classList.toggle('picked', browseSelected.has(en.rel));
       list.appendChild(row);
     });
     updateBrowseCount();
