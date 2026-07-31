@@ -742,4 +742,68 @@ body.col-resizing iframe, body.col-resizing .leaflet-container { pointer-events:
 /* The answer — the one thing that must not end up folded away. */
 .msg-answer { border-left:3px solid var(--accent); padding-left:11px; }
 .msg-answer .agent-tag { background:var(--accent); color:#F5F2EB; }
-.msg-answer .msg-body { white-space:pre-wrap; }
+/* ==========================================================================
+   Prose written by the model — summaries, answers, log digests.
+   It arrives as markdown; without this it read as one unbroken block.
+   ========================================================================== */
+.prose > :first-child { margin-top:0; }
+.prose > :last-child { margin-bottom:0; }
+.prose p { margin:0 0 8px; line-height:1.65; }
+.prose h3, .prose h4, .prose h5, .prose h6 {
+  margin:14px 0 6px; font-size:12.5px; font-weight:650; color:var(--ink);
+  letter-spacing:.01em;
+}
+.prose h3 { font-size:13px; }
+.prose ul, .prose ol { margin:0 0 8px; padding-left:20px; }
+.prose li { margin:2px 0; line-height:1.6; }
+.prose li.sub { margin-left:16px; list-style-type:circle; }
+.prose blockquote {
+  margin:6px 0; padding:2px 0 2px 10px; border-left:2px solid var(--line);
+  color:var(--ink-soft);
+}
+.prose hr { border:0; border-top:1px solid var(--line-soft); margin:10px 0; }
+.prose strong { font-weight:650; color:var(--ink); }
+.prose em { font-style:italic; color:var(--ink-soft); }
+.prose-pre {
+  margin:6px 0; padding:8px 10px; border-radius:5px; overflow-x:auto;
+  background:var(--code-bg); color:var(--code-ink);
+  font-family:var(--font-mono); font-size:11px; line-height:1.55;
+}
+.prose-pre code { background:none; color:inherit; padding:0; font-size:inherit; }
+.prose-table {
+  border-collapse:collapse; margin:8px 0; font-size:11.5px; display:block;
+  overflow-x:auto; max-width:100%;
+}
+.prose-table th, .prose-table td {
+  border:1px solid var(--line-soft); padding:4px 9px; text-align:left;
+  white-space:nowrap;
+}
+.prose-table th { background:var(--panel-sink); font-weight:650; }
+
+/* Files the run produced, listed under its answer. */
+.ans-files { margin-top:9px; padding-top:8px; border-top:1px solid var(--line-soft);
+             display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.ans-files-label { font-size:10px; text-transform:uppercase; letter-spacing:.05em;
+                   color:var(--ink-muted); margin-right:2px; }
+.ans-files .run-file { font-size:11px; }
+
+/* The stored summary, shown when the conversation is rebuilt from disk. */
+.msg-summary { margin-top:7px; color:var(--ink); font-size:12.5px; }
+
+/* The compacted log entry repeats the answer, so it arrives folded. */
+.log-fold > summary {
+  cursor:pointer; font-weight:600; color:var(--ink-soft); list-style:none;
+  display:flex; align-items:center; gap:6px;
+}
+.log-fold > summary::-webkit-details-marker { display:none; }
+.log-fold > summary::before {
+  content:''; width:0; height:0; border-left:5px solid var(--ink-muted);
+  border-top:4px solid transparent; border-bottom:4px solid transparent;
+  transition:transform .15s ease;
+}
+.log-fold[open] > summary::before { transform:rotate(90deg); }
+.log-fold > summary:hover { color:var(--accent); }
+
+/* Progress chatter inside the bubble, quieter than the reasoning itself. */
+.trace-system .trace-tag { color:var(--ink-muted); }
+.trace-system .trace-text { color:var(--ink-muted); font-style:italic; }

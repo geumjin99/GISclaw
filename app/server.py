@@ -411,6 +411,24 @@ def _guard_engine(llm):
     return llm
 
 
+def _clean_summary(observation: str) -> str:
+    """The agent's own closing words, without the finish tool's packaging.
+
+    `finish` returns "Task complete / Summary: … / Output files (n): …". Only the
+    middle part was written for a person to read; the file list is shown in the
+    interface anyway, and the first line says nothing.
+    """
+    text = (observation or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"^(?:\U0001F4CB\s*)?Task complete\s*\n?", "", text, flags=re.I)
+    m = re.match(r"\s*Summary:\s*", text)
+    if m:
+        text = text[m.end():]
+    text = re.split(r"\n(?:Output files \(\d+\):|⚠️ No output files)", text)[0]
+    return text.strip()
+
+
 def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: queue.Queue):
     recorder = None
     try:
@@ -542,6 +560,10 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
             if ev.get("action") == "finish":
                 # The agent's closing write-up — the one place caveats usually land.
                 step["observation"] = ev.get("observation_full") or ev.get("observation") or ""
+            elif ev.get("success") is False:
+                # Keep failures too: they are what a closing note has to explain.
+                step["observation"] = (ev.get("observation_full")
+                                       or ev.get("observation") or "")[:800]
             steps_log.append(step)
             step_msg = {
                 "type": "step",
@@ -614,9 +636,22 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
             "outputs": output_files,
             "cost": cost_info,
         }
-        summary["final_summary"] = next(
+        # Every run ends in words. Normally they are the agent's own, from the
+        # finish call; when it stopped without writing any — out of rounds, stuck
+        # repeating itself — one small call produces the closing note instead, so
+        # the reader is never left with just a row of counters.
+        final_text = _clean_summary(next(
             (s.get("observation", "") for s in reversed(steps_log)
-             if s.get("action") == "finish"), "")
+             if s.get("action") == "finish"), ""))
+        if not final_text and steps_log:
+            msg_queue.put({"type": "status", "content": "Writing the closing note…"})
+            try:
+                final_text = reflect.closing_note(llm, instruction, summary, steps_log)
+            except Exception as e:
+                log.warning(f"closing note failed: {e}")
+        summary["final_summary"] = final_text
+        msg_queue.put({"type": "summary", "run_id": run_id, "content": final_text,
+                       "outputs": output_files, "success": bool(result.success)})
         entry = journal.append_chat(pdir, summary)
         try:
             journal.append_run(pdir, project_name, dict(entry, steps=steps_log))

@@ -50,6 +50,81 @@
   const IMG_EXT = ['png', 'jpg', 'jpeg'];
   const extOf = p => (p.toLowerCase().split('.').pop() || '');
 
+  // Agent prose is markdown-ish. Printing it literally is what made a summary
+  // arrive as one unbroken wall of text with ** and - still sitting in it. This
+  // is deliberately small: headings, lists, tables, quotes, code, emphasis.
+  function prose(md) {
+    const inline = s => esc(s)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s.,;:)!?]|$)/g, '$1<em>$2</em>')
+      .replace(/(^|[\s(])_([^_\n]+)_(?=[\s.,;:)!?]|$)/g, '$1<em>$2</em>');
+    const lines = String(md || '').replace(/\r/g, '').split('\n');
+    const out = [];
+    let para = [], list = null, fence = null;
+    const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; } };
+    const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+    const block = () => { flushPara(); closeList(); };
+    const cellsOf = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => inline(c.trim()));
+
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i].replace(/\s+$/, '');
+      const line = raw.trim();
+
+      if (fence !== null) {                       // inside a code fence
+        if (/^```/.test(line)) { out.push(`<pre class="prose-pre"><code>${esc(fence.join('\n'))}</code></pre>`); fence = null; }
+        else fence.push(raw);
+        continue;
+      }
+      if (/^```/.test(line)) { block(); fence = []; continue; }
+      if (!line) { block(); continue; }           // blank line ends a paragraph
+      if (/^([-*_]\s*){3,}$/.test(line)) { block(); out.push('<hr/>'); continue; }
+
+      const h = line.match(/^(#{1,6})\s+(.*)$/);
+      if (h) { block(); out.push(`<h${Math.min(h[1].length + 2, 6)}>${inline(h[2])}</h${Math.min(h[1].length + 2, 6)}>`); continue; }
+
+      if (/^>\s?/.test(line)) { block(); out.push(`<blockquote>${inline(line.replace(/^>\s?/, ''))}</blockquote>`); continue; }
+
+      // a table needs its dashed separator on the next line to count as one
+      if (line.includes('|') && /^\|?[\s:|-]*-{2,}[\s:|-]*$/.test((lines[i + 1] || '').trim())) {
+        block();
+        const head = cellsOf(line);
+        const rows = [];
+        i += 2;
+        while (i < lines.length && lines[i].trim() && lines[i].includes('|')) { rows.push(cellsOf(lines[i])); i++; }
+        i--;
+        out.push('<table class="prose-table"><thead><tr>' + head.map(c => `<th>${c}</th>`).join('')
+          + '</tr></thead><tbody>' + rows.map(r => '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>').join('')
+          + '</tbody></table>');
+        continue;
+      }
+
+      const ol = line.match(/^(\d+)[.)]\s+(.*)$/);
+      const ul = line.match(/^[-*•]\s+(.*)$/);
+      if (ol || ul) {
+        const want = ol ? 'ol' : 'ul';
+        flushPara();
+        if (list !== want) { closeList(); out.push(`<${want}>`); list = want; }
+        out.push(`<li${/^\s{2,}/.test(raw) ? ' class="sub"' : ''}>${inline(ol ? ol[2] : ul[1])}</li>`);
+        continue;
+      }
+      closeList();
+      para.push(line);                            // wrapped lines join one paragraph
+    }
+    if (fence && fence.length) out.push(`<pre class="prose-pre"><code>${esc(fence.join('\n'))}</code></pre>`);
+    block();
+    return out.join('\n');
+  }
+
+  // The finish tool wraps the agent's words in "Task complete / Summary: /
+  // Output files". Only the middle was written for a person. Mirrors the same
+  // strip on the server, for replayed runs that never went through it.
+  const cleanFinish = obs => String(obs || '')
+    .replace(/^\s*(?:\u{1F4CB}\s*)?Task complete\s*\n?/u, '')
+    .replace(/^\s*Summary:\s*/, '')
+    .split(/\n(?:Output files \(\d+\):|\u26A0\uFE0F? ?No output files)/)[0]
+    .trim();
+
   async function jget(url) { const r = await fetch(url); return r.json(); }
   async function jpost(url, body) {
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -523,12 +598,14 @@
   const chatScroll = $('#chatScroll');
   const KIND_LABELS = { user: 'You', thought: 'Thought', action: 'Action', observe: 'Observation', error: 'Issue', finish: 'Done', answer: 'Answer', system: 'Info' };
   function nowTime() { const d = new Date(); return d.toTimeString().slice(0, 8); }
-  function addMsg({ kind, text, html }) {
+  function addMsg({ kind, text, html, md }) {
     const m = document.createElement('div');
     m.className = 'msg msg-' + kind;
+    // `md` is anything the model wrote: it gets laid out as prose, not dumped.
+    const body = html || (md ? prose(md) : esc(text || ''));
     m.innerHTML = `<div class="msg-meta"><span class="agent-tag">${KIND_LABELS[kind] || kind}</span><span class="ts">${nowTime()}</span></div>`
       + `<div class="msg-actions"><button class="msg-act" title="Save this as a standing preference in your global memory">Remember</button></div>`
-      + `<div class="msg-body">${html || esc(text || '')}</div>`;
+      + `<div class="msg-body${md ? ' prose' : ''}">${body}</div>`;
     m.querySelector('.msg-act').addEventListener('click', () => {
       rememberText(text || m.querySelector('.msg-body').textContent);
     });
@@ -558,7 +635,22 @@
     chatScroll.scrollTop = chatScroll.scrollHeight;
     state.traceEl = wrap;
     state.traceCount = 0;
+    state.traceRounds = 0;
+    // Status lines that arrived before the first step belong in here too.
+    (state.pendingStatus || []).forEach(t => traceAdd('system', t));
+    state.pendingStatus = [];
     return wrap;
+  }
+
+  // Progress chatter ("Initializing…", "Loaded skill: x") is not conversation.
+  // It goes to the status bar, and into the bubble as part of the record —
+  // never as its own message in the thread. Held back until the bubble exists,
+  // so a question answered without a run still leaves no empty bubble behind.
+  function traceStatus(text) {
+    if (!text) return;
+    setStatus(text, 'running');
+    if (state.traceEl) traceAdd('system', text);
+    else if (!state.traceDone) (state.pendingStatus = state.pendingStatus || []).push(text);
   }
 
   function traceAdd(kind, text, html) {
@@ -569,6 +661,9 @@
       + `<span class="trace-text">${html || esc(text || '')}</span>`;
     wrap.querySelector('.trace-body').appendChild(row);
     state.traceCount++;
+    // Count rounds, not rows: the header should agree with "5 rounds" below it,
+    // not report the seventeen lines those five rounds happened to produce.
+    if (kind === 'action') state.traceRounds = (state.traceRounds || 0) + 1;
     // The one-line summary in the header is what you read while it runs.
     const first = (text || '').split('\n')[0].slice(0, 90);
     if (first) wrap.querySelector('.trace-sub').textContent = first;
@@ -585,10 +680,14 @@
 
   function closeTrace(done) {
     const wrap = state.traceEl;
+    state.traceDone = true;
     if (!wrap) return;
-    const n = state.traceCount || 0;
-    const secs = done && done.elapsed_s ? ` \u00b7 ${done.elapsed_s}s` : '';
-    closeTraceEl(wrap, `Reasoning \u00b7 ${n} step${n === 1 ? '' : 's'}${secs}`);
+    const n = state.traceRounds || state.traceCount || 0;
+    // The run's own figure if we have it; otherwise the clock on this page,
+    // since the bubble is folded the moment the answer lands, before `done`.
+    const el = (done && done.elapsed_s)
+      || (state.startedAt ? ((Date.now() - state.startedAt) / 1000).toFixed(1) : 0);
+    closeTraceEl(wrap, `Reasoning \u00b7 ${n} step${n === 1 ? '' : 's'}${el ? ` \u00b7 ${el}s` : ''}`);
     state.traceEl = null;
   }
 
@@ -797,6 +896,11 @@
     const rid = ++state.runId;
     state.running = true;
     state.traceEl = null; state.traceCount = 0;
+    // Per-run flags. Status lines that arrive after a bubble has been folded
+    // belong to no bubble at all — without this reset they would surface inside
+    // the *next* run's reasoning.
+    state.traceDone = false; state.pendingStatus = []; state.traceRounds = 0;
+    state.gotSummary = false; state.finishObs = '';
     resetRunUI();
     // Echo the prompt as the user's own turn, then clear the box — otherwise the
     // text sits there and the next run silently re-sends it.
@@ -841,14 +945,26 @@
     let msg; try { msg = JSON.parse(data); } catch (e) { return; }
 
     if (ev === 'heartbeat') return;
-    if (ev === 'status') { addMsg({ kind: 'system', text: msg.content }); return; }
+    if (ev === 'status') { traceStatus(msg.content); return; }
     if (ev === 'answer') {
       // Answered from the project record — no analysis run was needed.
-      addMsg({ kind: msg.mode === 'offtopic' ? 'system' : 'finish', text: msg.content });
+      addMsg({ kind: msg.mode === 'offtopic' ? 'system' : 'answer', md: msg.content });
+      return;
+    }
+    if (ev === 'summary') {
+      // Every run ends in words. This is them.
+      state.gotSummary = true;
+      closeTrace();                       // fold the reasoning before the answer
+      renderSummary(msg.content, msg.outputs);
       return;
     }
     if (ev === 'log') {
-      const m = addMsg({ kind: 'system', html: `<b>Log entry written</b><div class="log-digest">${esc(msg.content)}</div>` });
+      // The durable digest. It repeats the summary above, so it starts folded.
+      const m = addMsg({
+        kind: 'system',
+        html: `<details class="log-fold"><summary>Log entry written to LOG.md</summary>`
+            + `<div class="log-digest prose">${prose(msg.content)}</div></details>`,
+      });
       m.classList.add('msg-history');
       return;
     }
@@ -864,9 +980,10 @@
     }
     if (ev === 'done') { finishRun(rid, msg.success, null, msg); return; }
     if (ev === 'step') {
-      // The closing summary is the answer, not a step — it goes outside the
-      // bubble, in full, where the reader will actually see it.
-      const isFinish = /^finish\b/.test(msg.action || '');
+      // Everything the agent does goes in the bubble, the closing words
+      // included — those come back as their own `summary` event, cleaned of the
+      // tool's packaging, and that is what gets shown as the answer.
+      if (/^finish\b/.test(msg.action || '')) state.finishObs = msg.observation || '';
       if (msg.thought) traceAdd('thought', msg.thought);
       if (msg.action) {
         bumpStep();
@@ -874,13 +991,9 @@
       }
       if (msg.code) { followTab('code'); appendCode(msg.code); }
       if (msg.observation) {
-        if (isFinish) {
-          addMsg({ kind: 'answer', text: msg.observation });
-        } else {
-          const obs = msg.observation.slice(0, 600);
-          traceAdd(msg.success ? 'observe' : 'error', obs);
-          if (msg.code) showStdout(obs, msg.success);
-        }
+        const obs = msg.observation.slice(0, 600);
+        traceAdd(msg.success ? 'observe' : 'error', obs);
+        if (msg.code) showStdout(obs, msg.success);
       }
       return;
     }
@@ -890,6 +1003,32 @@
     // reflect into the outputs tree without a full refetch
     if (state.tree && !state.tree.outputs.includes(filename)) state.tree.outputs.push(filename);
     renderCatalog();
+  }
+
+  // The answer: the agent's own closing words, laid out as prose, with whatever
+  // it produced listed underneath as things you can click.
+  function renderSummary(text, outputs) {
+    const body = (text || '').trim();
+    if (!body && !(outputs || []).length) return null;
+    const m = addMsg({ kind: 'answer', md: body || '_No closing summary was written for this run._' });
+    if ((outputs || []).length) {
+      const row = document.createElement('div');
+      row.className = 'ans-files';
+      row.innerHTML = '<span class="ans-files-label">Produced</span>'
+        + outputs.map(f => `<a class="run-file" data-f="${esc(f)}">${esc(f)}</a>`).join('');
+      row.querySelectorAll('.run-file').forEach(a => a.addEventListener('click', () => openOutput(a.dataset.f)));
+      m.querySelector('.msg-body').appendChild(row);
+    }
+    chatScroll.scrollTop = chatScroll.scrollHeight;
+    return m;
+  }
+
+  function openOutput(fn) {
+    const ex = extOf(fn), base = `/api/projects/${state.project.id}`;
+    if (IMG_EXT.includes(ex)) openImageView(fn, `${base}/file?where=outputs&path=${encodeURIComponent(fn)}`);
+    else if (ex === 'tif' || ex === 'tiff') addRasterOverlay(fn, `${base}/overlay?where=outputs&path=${encodeURIComponent(fn)}`);
+    else if (GEO_EXT.includes(ex)) showFileOnMap(fn, 'outputs');
+    else openTextFile(fn, 'outputs');
   }
 
   function finishRun(rid, success, errText, done) {
@@ -903,6 +1042,9 @@
       return;                       // answered from the record; nothing was run
     }
     closeTrace(done);
+    // Belt and braces: if no summary arrived, say something rather than nothing.
+    if (done && !state.gotSummary) renderSummary(cleanFinish(state.finishObs), done.output_files);
+    state.gotSummary = false; state.finishObs = '';
     if (done) {
       setSelfCorr(done.self_corrections || 0);
       addMsg({ kind: 'finish', html: `Finished in <b>${done.elapsed_s}s</b> · ${done.rounds} rounds · ${(done.output_files || []).length} output(s)` });
@@ -1760,34 +1902,7 @@
   const closeJournal = () => journalModal.classList.add('hidden');
   $('#journalClose').addEventListener('click', closeJournal);
 
-  function mdToHtml(md) {
-    const inline = s => esc(s)
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
-    const out = [];
-    let list = null;
-    const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
-    (md || '').split('\n').forEach(raw => {
-      const line = raw.replace(/\s+$/, '');
-      if (/^---+$/.test(line)) { closeList(); out.push('<hr/>'); return; }
-      if (/^#\s+/.test(line)) { closeList(); out.push(`<h1>${inline(line.slice(2))}</h1>`); return; }
-      if (/^##\s+/.test(line)) { closeList(); out.push(`<h2>${inline(line.slice(3))}</h2>`); return; }
-      if (/^>\s?/.test(line)) { closeList(); out.push(`<blockquote>${inline(line.replace(/^>\s?/, ''))}</blockquote>`); return; }
-      const ol = line.match(/^(\d+)\.\s+(.*)$/);
-      if (ol) {
-        if (list !== 'ol') { closeList(); out.push('<ol>'); list = 'ol'; }
-        out.push(`<li>${inline(ol[2])}</li>`); return;
-      }
-      if (/^[-*]\s+/.test(line)) {
-        if (list !== 'ul') { closeList(); out.push('<ul>'); list = 'ul'; }
-        out.push(`<li>${inline(line.replace(/^[-*]\s+/, ''))}</li>`); return;
-      }
-      closeList();
-      if (line.trim()) out.push(`<p>${inline(line)}</p>`);
-    });
-    closeList();
-    return out.join('\n');
-  }
+  const mdToHtml = md => prose(md);
 
   async function openLog() {
     if (!state.project) return;
@@ -1922,9 +2037,14 @@
     const files = outs.length
       ? `<div class="msg-files">${outs.map(f => `<a class="run-file" data-f="${esc(f)}">${esc(f)}</a>`).join(' · ')}</div>`
       : '';
+    // What was actually concluded, not just how long it took. Without this the
+    // reasoning was foldable but the answer disappeared on the next page load.
+    const said = (e.final_summary || '').trim();
     const m = addMsg({
       kind: e.success ? 'finish' : 'error',
-      html: `<div class="msg-run-head">${chip}<span>${stats}</span></div>${files}`,
+      html: `<div class="msg-run-head">${chip}<span>${stats}</span></div>`
+          + (said ? `<div class="msg-summary prose">${prose(said)}</div>` : '')
+          + files,
     });
     m.classList.add('msg-history');
     const c = m.querySelector('.run-chip');
@@ -1969,6 +2089,7 @@
       const obs = ev.observation_full || ev.observation;
       if (obs) {
         if (/^finish\b/.test(ev.action || '')) addMsg({ kind: 'answer', text: String(obs) });
+        if (/^finish\b/.test(ev.action || '')) renderSummary(cleanFinish(String(obs)), null);
         else traceAdd(ev.success === false ? 'error' : 'observe', String(obs).slice(0, 600));
       }
     });

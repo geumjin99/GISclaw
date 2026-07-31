@@ -57,6 +57,21 @@ Format exactly:
 **Carries forward:** files and decisions a later run should reuse, or "nothing".
 """
 
+CLOSING_SYSTEM = """You write the closing note for one run of a GIS analysis agent.
+
+This run ended without the agent writing its own summary — it ran out of rounds,
+kept repeating itself, or stopped on an error. Say what a colleague would want to
+be told when they come back to find the run over.
+
+Rules:
+- Only state facts present in the material given. Never invent a number or a file
+  name. If the material does not say something, do not say it either.
+- Open with where it actually got to, and say plainly that it did not finish
+  cleanly. Then what exists on disk now, then what went wrong.
+- Plain prose. Two to five sentences. No headings, no bullet points, no preamble.
+- Write in the same language the user wrote their request in.
+"""
+
 INTENT_SYSTEM = """You triage incoming messages for a GIS analysis assistant.
 
 Classify the user's message into exactly one of:
@@ -135,6 +150,35 @@ def compact_run(llm, pdir: str, project_name: str, entry: dict, steps: list) -> 
     with open(path, "a", encoding="utf-8") as f:
         f.write(f"\n---\n\n## {when} · {entry.get('run_id', '')}\n\n{digest}\n")
     return digest
+
+
+def closing_note(llm, instruction: str, entry: dict, steps: list) -> str:
+    """A summary for a run that ended without the agent writing one.
+
+    Every run should end in words, not just a chip saying "25 rounds". When the
+    agent stops without calling finish — out of rounds, stuck in a loop, killed
+    by an error — this is what the reader gets instead of silence.
+    """
+    material = (
+        f"The user asked:\n{instruction}\n\n"
+        f"Outcome: {'produced output' if entry.get('success') else 'did not complete'} · "
+        f"{entry.get('rounds', 0)} rounds · {entry.get('elapsed_s', 0)}s · "
+        f"{entry.get('self_corrections', 0)} self-corrections\n"
+        f"Files on disk from this run: {', '.join(entry.get('outputs') or []) or 'none'}\n\n"
+        f"What it did, round by round:\n{_trace_digest(steps)}\n"
+    )
+    last_error = next((s.get("observation", "") for s in reversed(steps)
+                       if s.get("success") is False and s.get("observation")), "")
+    if last_error:
+        material += f"\nThe last thing that failed:\n{last_error[:800]}\n"
+    try:
+        res = llm.generate(prompt=material, system_prompt=CLOSING_SYSTEM,
+                           user_message=material, max_tokens=500, stop=[])
+        text = (res.get("text") if isinstance(res, dict) else str(res)) or ""
+    except Exception:
+        return ""
+    text = text.strip()
+    return "" if text.startswith("Error") else text
 
 
 def recent_log(pdir: str, n_entries: int = 6, char_cap: int = 4000) -> str:
