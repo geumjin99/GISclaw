@@ -634,7 +634,14 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
             s = llm.get_stats()
             cost_info = {
                 "api_calls": s.get("total_calls", 0),
+                # input_tokens is the uncached remainder only — recording it
+                # alone would make a cached run look far cheaper in tokens than
+                # it was. prompt_tokens is the honest total.
                 "input_tokens": s.get("total_input_tokens", 0),
+                "cache_read_tokens": s.get("cache_read_tokens", 0),
+                "cache_write_tokens": s.get("cache_write_tokens", 0),
+                "prompt_tokens": s.get("prompt_tokens", s.get("total_input_tokens", 0)),
+                "cache_hit_rate": s.get("cache_hit_rate", 0),
                 "output_tokens": s.get("total_output_tokens", 0),
                 "cost_usd": s.get("estimated_cost_usd", 0),
             }

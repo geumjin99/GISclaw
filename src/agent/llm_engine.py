@@ -599,6 +599,10 @@ class ClaudeEngine:
         self._total_time = 0.0
         self._total_input_tokens = 0
         self._total_output_tokens = 0
+        # Cached input is billed differently from fresh input, so it has to
+        # be counted separately or the cost estimate drifts low.
+        self._cache_read_tokens = 0
+        self._cache_write_tokens = 0
 
     def load_model(self) -> bool:
         """初始化 Anthropic client"""
@@ -656,7 +660,18 @@ class ClaudeEngine:
             if not self._rejects_sampling_params():
                 kwargs["temperature"] = temperature or self.temperature
             if system_prompt:
-                kwargs["system"] = system_prompt
+                # Within one ReAct run the system prompt is byte-identical on
+                # every round — skills, memory, the project digest and the
+                # tool descriptions are fixed once the run starts — yet it is
+                # re-sent each time and was charged at full rate. Marking it
+                # cacheable lets rounds 2..N read it at a tenth of the price.
+                # Below the model's minimum cacheable length it simply does
+                # not cache; no error, so this is safe to apply always.
+                kwargs["system"] = [{
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }]
             # Claude 支持 stop_sequences
             if stop:
                 kwargs["stop_sequences"] = stop
@@ -676,8 +691,13 @@ class ClaudeEngine:
                     text = block.text
                     break
             text = text.strip()
-            input_tokens = response.usage.input_tokens
-            output_tokens = response.usage.output_tokens
+            usage = response.usage
+            # input_tokens counts only what was NOT served from cache; the
+            # whole prompt is input + cache_creation + cache_read.
+            input_tokens = usage.input_tokens
+            output_tokens = usage.output_tokens
+            cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+            cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
 
             elapsed_ms = (time.time() - start) * 1000
 
@@ -686,6 +706,8 @@ class ClaudeEngine:
             self._total_tokens_generated += output_tokens
             self._total_input_tokens += input_tokens
             self._total_output_tokens += output_tokens
+            self._cache_read_tokens += cache_read
+            self._cache_write_tokens += cache_write
             self._total_time += elapsed_ms
 
             return {
@@ -706,15 +728,27 @@ class ClaudeEngine:
         """获取推理性能统计（含费用估算）"""
         avg_latency = self._total_time / max(self._total_calls, 1)
         in_cost, out_cost = self.cost_per_m
+        # Cached input is not free and not full price: a cache read bills at
+        # 0.1x the input rate and writing an entry costs 1.25x. Folding all
+        # three buckets into one number would understate what a run actually
+        # cost, since the API reports only the uncached remainder as input.
         estimated_cost = (
             self._total_input_tokens * in_cost / 1_000_000
+            + self._cache_write_tokens * in_cost * 1.25 / 1_000_000
+            + self._cache_read_tokens * in_cost * 0.10 / 1_000_000
             + self._total_output_tokens * out_cost / 1_000_000
         )
+        prompt_tokens = (self._total_input_tokens + self._cache_write_tokens
+                         + self._cache_read_tokens)
         return {
             "total_calls": self._total_calls,
             "total_tokens": self._total_tokens_generated,
             "total_input_tokens": self._total_input_tokens,
             "total_output_tokens": self._total_output_tokens,
+            "cache_read_tokens": self._cache_read_tokens,
+            "cache_write_tokens": self._cache_write_tokens,
+            "prompt_tokens": prompt_tokens,
+            "cache_hit_rate": round(self._cache_read_tokens / prompt_tokens, 3) if prompt_tokens else 0.0,
             "total_time_ms": self._total_time,
             "avg_latency_ms": avg_latency,
             "estimated_cost_usd": round(estimated_cost, 4),
@@ -727,4 +761,8 @@ class ClaudeEngine:
         self._total_time = 0.0
         self._total_input_tokens = 0
         self._total_output_tokens = 0
+        # Cached input is billed differently from fresh input, so it has to
+        # be counted separately or the cost estimate drifts low.
+        self._cache_read_tokens = 0
+        self._cache_write_tokens = 0
 
