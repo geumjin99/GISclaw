@@ -285,6 +285,24 @@ its frozen commit. Reproduction work should use that artifact.
 The bundled example dataset carries its own citation requirement — see
 [`examples/urban-heat-madison/README.md`](examples/urban-heat-madison/README.md).
 
+## Before you rely on it
+
+GISclaw plans and writes its own analysis code, and that planning comes from a
+language model. It can be wrong, and it can be wrong while sounding confident.
+The built-in discipline reduces the classic failures — all-null joins, mismatched
+CRS, interpolation outside the observed range, quietly imputed values — but does
+not eliminate them.
+
+Every run leaves the executed code, the full trace, and the outputs on disk, so
+the work can be checked. Check it. Treat what comes out as a draft for expert
+review rather than a finding, especially where a wrong answer causes harm. The
+author accepts no responsibility for results the model produces or for decisions
+based on them, and the software comes with no warranty. Note also that the
+reasoning runs on the model provider you configure, so a description of your
+data leaves your machine.
+
+The full text is in [`DISCLAIMER.md`](DISCLAIMER.md) — worth reading once.
+
 ## Licence
 
 Copyright (C) 2026 Han Jinzhen. GISclaw is free software under the
@@ -525,6 +543,19 @@ GISclaw 会先判断收到的是哪一类消息,再决定怎么响应。因此�
 
 内置示例数据有独立的引用要求,见
 [`examples/urban-heat-madison/README.md`](examples/urban-heat-madison/README.md)。
+
+## 使用前请先知道
+
+GISclaw 的分析路径和代码都是它自己规划、自己写的,而这个规划来自大语言模型。它可能出错,
+而且可能在**语气非常肯定**的情况下出错。内置的操作纪律能显著降低几类典型失败 —— 连接后
+全为空、坐标系不一致、插值结果超出观测范围、缺失值被悄悄填补 —— 但**不能消除**它们。
+
+每次运行都会把实际执行的代码、完整轨迹和产物留在磁盘上,就是为了让你能核对。请核对。
+把产出当作**供专业人员复核的草稿**,而不是结论,在错误答案会造成危害的场合尤其如此。
+作者对模型产生的结果、以及据此做出的决定不承担任何责任,本软件不提供任何担保。另外请注意:
+推理发生在你配置的模型服务商那里,因此**对你数据的描述会离开本机**。
+
+完整条款见 [`DISCLAIMER.md`](DISCLAIMER.md),建议读一遍。
 
 ## 许可
 
@@ -774,6 +805,21 @@ Skill은 특정 유형의 분석을 어떻게 수행할지 담은 **디렉터리
 
 기본 제공 예제 데이터에는 별도의 인용 요건이 있습니다 —
 [`examples/urban-heat-madison/README.md`](examples/urban-heat-madison/README.md) 참조.
+
+## 사용하기 전에
+
+GISclaw는 분석 경로와 코드를 스스로 계획하고 작성하며, 그 계획은 대규모 언어 모델에서
+나옵니다. 틀릴 수 있고, 확신에 찬 어조로 틀릴 수도 있습니다. 내장된 운영 원칙은 전형적인
+실패 — 전부 NULL이 되는 조인, 좌표계 불일치, 관측 범위를 벗어난 보간, 조용히 채워진
+결측값 — 를 크게 줄이지만 **없애지는 못합니다.**
+
+실행할 때마다 실제로 수행된 코드와 전체 추적, 산출물이 디스크에 남습니다. 확인하십시오.
+결과는 결론이 아니라 **전문가 검토를 위한 초안**으로 다루십시오. 잘못된 답이 피해로
+이어지는 상황에서는 특히 그렇습니다. 저작자는 모델이 만들어 낸 결과와 그에 근거한 결정에
+대해 어떠한 책임도 지지 않으며, 본 소프트웨어는 어떠한 보증도 제공하지 않습니다. 또한
+추론은 사용자가 설정한 제공자에서 수행되므로 **데이터에 대한 설명이 기기를 벗어납니다.**
+
+전문은 [`DISCLAIMER.md`](DISCLAIMER.md) 에 있습니다. 한 번 읽어 두시기를 권합니다.
 
 ## 라이선스
 
