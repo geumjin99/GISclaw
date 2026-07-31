@@ -272,12 +272,18 @@ class GISReActAgent:
             
             # LLM 生成
             gen_t0 = time.time()
+            gen_kwargs = {}
+            if getattr(self.llm, "supports_segmented_user", False):
+                segments = self._split_conversation(user_msg, history)
+                if segments:
+                    gen_kwargs["user_segments"] = segments
             response = self.llm.generate(
                 prompt="",
                 system_prompt=system_prompt,
                 user_message=conversation_text,
                 max_tokens=2048,
                 stop=["Observation:"],
+                **gen_kwargs,
             )
             gen_time = (time.time() - gen_t0) * 1000
             
@@ -833,6 +839,34 @@ class GISReActAgent:
         
         return '\n---\n'.join(hints) if hints else ""
     
+    def _split_conversation(self, user_msg: str, history: list):
+        """Same text as _format_conversation, split for prompt caching.
+
+        Everything except the newest exchange is byte-for-byte what the previous
+        round already sent, so it can be cached and read back instead of paid
+        for again. The newest exchange stays outside the cached span because the
+        deadline warning rewrites history[-1] in place.
+
+        Returns None when there is nothing settled yet, or when the transcript
+        is long enough that _format_conversation would truncate it — the
+        truncated form is not a growing prefix, so it cannot be cached.
+        """
+        parts = [user_msg]
+        for role, content in history:
+            if role == "assistant":
+                parts.append(f"\nAssistant:\n{content}")
+            else:
+                parts.append(f"\n{content}")
+        parts.append("\nNow continue with the next step. Respond with Thought/Action/Args:")
+
+        if len("\n".join(parts)) > 16000 or len(parts) < 4:
+            return None
+        # stable + volatile must re-join to exactly what _format_conversation
+        # produces, or the model sees a different prompt than it used to.
+        stable = "\n".join(parts[:-2])
+        volatile = "\n" + "\n".join(parts[-2:])
+        return [stable, volatile]
+
     def _format_conversation(self, user_msg: str, history: list) -> str:
         """将对话历史格式化为单个 user message（适配 Ollama 单轮接口）"""
         parts = [user_msg]

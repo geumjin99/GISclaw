@@ -603,6 +603,10 @@ class ClaudeEngine:
         # be counted separately or the cost estimate drifts low.
         self._cache_read_tokens = 0
         self._cache_write_tokens = 0
+        # Tells a caller it may hand the user turn over pre-split so the
+        # settled part can be cached. Engines without this keep getting
+        # one plain string.
+        self.supports_segmented_user = True
 
     def load_model(self) -> bool:
         """初始化 Anthropic client"""
@@ -632,6 +636,7 @@ class ClaudeEngine:
         max_tokens: Optional[int] = None,
         system_prompt: Optional[str] = None,
         user_message: Optional[str] = None,
+        user_segments: Optional[list] = None,
     ) -> Dict[str, Any]:
         """调用 Claude API 生成文本（兼容 OpenAIEngine 接口）"""
         if self.client is None:
@@ -646,7 +651,18 @@ class ClaudeEngine:
             # 构建消息
             messages = []
             content = user_message or prompt
-            if content:
+            if user_segments:
+                # The caller split the turn into a settled part and this
+                # round's delta. Marking the settled part cacheable lets each
+                # round read the history the previous round paid to write,
+                # instead of re-buying the whole transcript every time.
+                blocks = []
+                for seg in user_segments[:-1]:
+                    blocks.append({"type": "text", "text": seg,
+                                   "cache_control": {"type": "ephemeral"}})
+                blocks.append({"type": "text", "text": user_segments[-1]})
+                messages.append({"role": "user", "content": blocks})
+            elif content:
                 messages.append({"role": "user", "content": content})
 
             kwargs = {

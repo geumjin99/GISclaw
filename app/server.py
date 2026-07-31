@@ -58,7 +58,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
-from app import journal, reflect
+from app import data_profile, journal, reflect
 from app.logging_setup import RunRecorder, get_app_logger
 from app.settings_store import PROVIDERS, SettingsStore, mask_key
 from app.skills_store import SkillsStore
@@ -129,7 +129,7 @@ Args: <arguments as JSON object>
 geopandas, rasterio, shapely, fiona, pyproj, numpy, pandas, scipy, matplotlib,
 sklearn, libpysal, esda, mgwr, xarray, rasterstats, networkx, osmnx, seaborn,
 mapclassify, h3, momepy, pointpats, spaghetti, openpyxl, rtree, geoplot, cartopy
-{skills_block}{catalog_block}{memory_block}{context_block}"""
+{skills_block}{catalog_block}{data_block}{memory_block}{context_block}"""
 
 # Level 0 — bodies of `always: true` skills. Standing rules, injected every run.
 SKILLS_BLOCK = """
@@ -292,6 +292,24 @@ These apply to every project. Follow them unless this task says otherwise —
 especially for cartography, symbology and deliverable conventions.
 
 {memory}
+"""
+
+DATA_BLOCK = """
+## Data already in this project
+
+This was read from the files themselves and cached, so relying on it is not
+the same as assuming — it satisfies the rule about taking schema from the data
+rather than from memory. Use these names, coordinate systems and extents to
+plan with; you do not need a discovery round to rediscover them.
+
+This listing is complete for data/, so list_files adds nothing for these — go
+straight to loading what you need. You do still call load_vector / load_raster:
+that puts the data in the sandbox, which reading this cannot do.
+
+It covers structure only. Before you compute on a column you still have to look
+at its values — nulls, ranges, units, and what a join actually matched.
+
+{data}
 """
 
 CONTEXT_BLOCK = """
@@ -530,6 +548,12 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
         memory_block = MEMORY_BLOCK.format(memory=memory_text) if memory_text else ""
         # Prefer the compacted log over the raw ask list — same continuity, far
         # fewer tokens, and it carries caveats the ask list never had.
+        try:
+            data_text = data_profile.build_block(data_profile.profile_project(pdir))
+        except Exception as e:
+            log.warning(f"data profile failed: {e}")
+            data_text = ""
+        data_block = DATA_BLOCK.format(data=data_text) if data_text else ""
         digest = reflect.recent_log(pdir)
         context_text = journal.build_context(pdir, manifest, digest=digest)
         context_block = CONTEXT_BLOCK.format(context=context_text) if context_text else ""
@@ -560,9 +584,11 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
             catalog_block=catalog_block,
             memory_block=memory_block,
             context_block=context_block,
+            data_block=data_block,
         )
         recorder.log(f"prompt: always_skills={len(skills_text)}c catalog={len(catalog_text)}c "
-                     f"memory={len(memory_text)}c context={len(context_text)}c")
+                     f"memory={len(memory_text)}c context={len(context_text)}c "
+                     f"data={len(data_text)}c")
         del _sandbox, _toolkit
         _orig_bsp = prompts_module.build_system_prompt
         prompts_module.build_system_prompt = lambda **kw: prompt_text
@@ -1233,6 +1259,7 @@ async def api_attach(pid: str, request: Request):
                         "map, and the agent will see CRS = None.")
         except Exception as e:
             log.error(f"attach failed {rel}: {e}")
+    data_profile.invalidate(pdir)
     log.info(f"[{pid}] attached {attached}")
     return {"attached": attached, "notices": notices, "data": _dir_tree(data_dir)}
 
@@ -1388,6 +1415,7 @@ async def api_upload(pid: str, request: Request, name: str = "", rel: str = ""):
     except Exception as e:
         log.error(f"upload {parts} failed: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
+    data_profile.invalidate(pdir)
     log.info(f"[{pid}] uploaded {'/'.join(parts)} ({written} bytes)")
     return {"saved": "/".join(parts), "bytes": written}
 
