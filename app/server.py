@@ -1082,6 +1082,34 @@ async def api_browse(path: str = ""):
     }
 
 
+# Formats that are really a set of files sharing one stem. Attaching only the
+# .shp yields a layer nothing can open, and a missing .prj silently drops the
+# CRS — so when one member is picked, its siblings travel with it.
+SIDECAR_GROUPS = {
+    ".shp": [".shp", ".shx", ".dbf", ".prj", ".cpg", ".qpj", ".qix", ".sbn",
+             ".sbx", ".fbn", ".fbx", ".ain", ".aih", ".atx", ".shp.xml"],
+    ".tab": [".tab", ".dat", ".map", ".id", ".ind"],
+    ".mif": [".mif", ".mid"],
+}
+_SIDECAR_OF = {ext: grp for grp in SIDECAR_GROUPS.values() for ext in grp}
+
+
+def _companion_files(src: str) -> list:
+    """Every file that has to travel with `src` for it to stay readable."""
+    low = src.lower()
+    ext = ".shp.xml" if low.endswith(".shp.xml") else os.path.splitext(low)[1]
+    group = _SIDECAR_OF.get(ext)
+    if not group:
+        return [src]
+    stem = src[: len(src) - len(ext)]
+    out = []
+    for e in group:
+        for cand in (stem + e, stem + e.upper()):
+            if os.path.isfile(cand) and cand not in out:
+                out.append(cand)
+    return out or [src]
+
+
 @app.post("/api/projects/{pid}/attach")
 async def api_attach(pid: str, request: Request):
     """Copy selected files/dirs (relative to WORKSPACE) into project data/."""
@@ -1093,6 +1121,7 @@ async def api_attach(pid: str, request: Request):
     rels = body.get("paths", [])
     data_dir = os.path.join(pdir, "data")
     attached = []
+    notices = []
     for rel in rels:
         try:
             src = _safe_join(WORKSPACE, rel)
@@ -1107,14 +1136,31 @@ async def api_attach(pid: str, request: Request):
                 if os.path.exists(dst):
                     shutil.rmtree(dst)
                 shutil.copytree(src, dst)
+                attached.append(base)
             else:
-                shutil.copy2(src, dst)
-            attached.append(base)
+                members = _companion_files(src)
+                for m in members:
+                    shutil.copy2(m, os.path.join(data_dir, os.path.basename(m)))
+                    attached.append(os.path.basename(m))
+                extras = len(members) - 1
+                if extras > 0:
+                    notices.append(
+                        f"{base}: brought {extras} companion file(s) along "
+                        "— a shapefile is unreadable without them.")
+                if base.lower().endswith(".shp") and not any(
+                        m.lower().endswith(".prj") for m in members):
+                    notices.append(
+                        f"{base}: no .prj alongside it, so the layer declares no "
+                        "coordinate system. It may sit in the wrong place on the "
+                        "map, and the agent will see CRS = None.")
         except Exception as e:
             log.error(f"attach failed {rel}: {e}")
     log.info(f"[{pid}] attached {attached}")
-    return {"attached": attached, "data": _dir_tree(data_dir)}
+    return {"attached": attached, "notices": notices, "data": _dir_tree(data_dir)}
 
+
+MAX_DISPLAY_FEATURES = 50_000   # above this, thin geometry for the map only
+MAX_OVERLAY_PX = 2048           # longest side of a raster overlay PNG
 
 def _serve_geo_or_image(fpath: str):
     """Serve a file for the viewer; convert shp/tif to web-friendly forms."""
@@ -1136,7 +1182,25 @@ def _serve_geo_or_image(fpath: str):
                     gdf = gdf.to_crs(epsg=4326)  # no-op if already 4326
                 except Exception as e:
                     log.warning(f"{fpath}: reproject to 4326 failed ({e}); serving in native CRS")
-            return Response(content=gdf.to_json(), media_type="application/json")
+            # Browsers choke long before GeoPandas does. Above this many
+            # features the geometry is thinned *for display only* — the file on
+            # disk and everything the agent reads stay untouched.
+            notice = ""
+            if len(gdf) > MAX_DISPLAY_FEATURES:
+                minx, miny, maxx, maxy = gdf.total_bounds
+                tol = max(maxx - minx, maxy - miny) / 4000.0
+                if tol > 0:
+                    gdf = gdf.copy()
+                    gdf["geometry"] = gdf.geometry.simplify(
+                        tol, preserve_topology=True)
+                notice = (f"{len(gdf):,} features — a large layer. Line and "
+                          "polygon geometry is thinned for the map (points "
+                          "cannot be), so drawing may still be slow. The data "
+                          "itself is unchanged.")
+            payload = gdf.to_json()
+            if notice:
+                payload = '{"_notice":' + json.dumps(notice) + "," + payload[1:]
+            return Response(content=payload, media_type="application/json")
         except Exception as e:
             # Fall back to raw bytes for plain JSON that geopandas can't parse as vector
             if ext in ("geojson", "json"):
@@ -1209,26 +1273,55 @@ def _raster_overlay_payload(fpath: str) -> dict:
         dst_crs = "EPSG:4326"
         transform, width, height = calculate_default_transform(
             src.crs, dst_crs, src.width, src.height, *src.bounds)
-        data = np.full((height, width), np.nan, dtype="float32")
-        reproject(
-            source=rasterio.band(src, 1), destination=data,
-            src_transform=src.transform, src_crs=src.crs,
-            dst_transform=transform, dst_crs=dst_crs,
-            resampling=Resampling.bilinear, dst_nodata=np.nan,
-            src_nodata=src.nodata)
+        # A full-resolution reprojection gets base64'd into the page, so a large
+        # scene would otherwise hang the browser. Displaying it smaller costs
+        # nothing: the analysis never touches this path.
+        if max(width, height) > MAX_OVERLAY_PX:
+            f = MAX_OVERLAY_PX / max(width, height)
+            width, height = max(1, int(width * f)), max(1, int(height * f))
+            transform, width, height = calculate_default_transform(
+                src.crs, dst_crs, src.width, src.height, *src.bounds,
+                dst_width=width, dst_height=height)
+        # Three or more bands are treated as RGB; anything else is a single
+        # measured band and gets a colour ramp.
+        bands = [1, 2, 3] if src.count >= 3 else [1]
+        stack = []
+        for b in bands:
+            buf_b = np.full((height, width), np.nan, dtype="float32")
+            reproject(
+                source=rasterio.band(src, b), destination=buf_b,
+                src_transform=src.transform, src_crs=src.crs,
+                dst_transform=transform, dst_crs=dst_crs,
+                resampling=Resampling.bilinear, dst_nodata=np.nan,
+                src_nodata=src.nodata)
+            stack.append(buf_b)
+        data = stack[0]
+        band_count = src.count
         west, north = transform * (0, 0)
         east, south = transform * (width, height)
 
+    def _stretch(a):
+        """2-98 percentile stretch to 0..1, ignoring nodata."""
+        ok = np.isfinite(a)
+        if not ok.any():
+            return np.zeros_like(a), 0.0, 1.0
+        lo, hi = np.nanpercentile(a[ok], 2), np.nanpercentile(a[ok], 98)
+        if hi <= lo:
+            hi = lo + 1
+        return np.clip((a - lo) / (hi - lo), 0, 1), float(lo), float(hi)
+
     valid = np.isfinite(data)
-    if valid.any():
-        vmin, vmax = np.nanpercentile(data[valid], 2), np.nanpercentile(data[valid], 98)
-        if vmax <= vmin:
-            vmax = vmin + 1
+    if len(stack) == 3:
+        rgb = np.dstack([_stretch(b)[0] for b in stack])
+        rgba = np.dstack([np.nan_to_num(rgb),
+                          np.where(valid, 0.95, 0.0)[..., None]])
+        vmin, vmax = 0.0, 1.0
+        mode = "rgb"
     else:
-        vmin, vmax = 0, 1
-    norm = np.clip((data - vmin) / (vmax - vmin), 0, 1)
-    rgba = matplotlib.colormaps["viridis"](np.nan_to_num(norm))
-    rgba[..., 3] = np.where(valid, 0.85, 0.0)  # transparent where nodata
+        norm, vmin, vmax = _stretch(data)
+        rgba = matplotlib.colormaps["viridis"](np.nan_to_num(norm))
+        rgba[..., 3] = np.where(valid, 0.85, 0.0)  # transparent where nodata
+        mode = "ramp"
     buf = io.BytesIO()
     import matplotlib.pyplot as plt
     plt.imsave(buf, rgba, format="png")
@@ -1238,6 +1331,8 @@ def _raster_overlay_payload(fpath: str) -> dict:
                    "north": float(north), "east": float(east)},
         "image": "data:image/png;base64," + b64,
         "vmin": float(vmin), "vmax": float(vmax),
+        "mode": mode, "bands": int(band_count), "width": int(width),
+        "height": int(height),
     }
 
 

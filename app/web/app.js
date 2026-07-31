@@ -47,7 +47,7 @@
     `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LUCIDE[name] || ''}</svg>`;
   const CAT_ICON = { crs: 'globe', geometry: 'box', overlay: 'layers', analysis: 'bars', raster: 'grid' };
 
-  const GEO_EXT = ['geojson', 'json', 'shp'];
+  const GEO_EXT = ['geojson', 'json', 'shp', 'gpkg', 'gml', 'kml'];
   const IMG_EXT = ['png', 'jpg', 'jpeg'];
   const extOf = p => (p.toLowerCase().split('.').pop() || '');
 
@@ -100,6 +100,7 @@
     let gj;
     try { gj = await jget(url); } catch (e) { addMsg({ kind: 'error', text: `Could not load ${name}` }); return; }
     if (gj.error) { addMsg({ kind: 'error', text: `${name}: ${gj.error}` }); return; }
+    if (gj._notice) addMsg({ kind: 'system', text: `${name}: ${gj._notice}` });
     const color = LAYER_COLORS[colorIdx++ % LAYER_COLORS.length];
     const layer = buildGeoLayer(gj, color);
     layer.addTo(map);
@@ -932,6 +933,9 @@
     if (res.attached && res.attached.length) {
       $('#footHint').textContent = 'Describe an analysis and press Run.';
       addMsg({ kind: 'system', text: `Added ${res.attached.length} file(s) to ${state.project.name}.` });
+    }
+    if (res.notices && res.notices.length) {
+      res.notices.forEach(n => addMsg({ kind: 'system', text: n }));
     }
   });
 
