@@ -252,6 +252,13 @@
       <div class="modal-sub">
         Pick files or folders from the workspace. They are copied into the project's <code>data/</code>.
       </div>
+      <div class="browse-upload">
+        <button class="reset-btn" id="btnUploadFiles"><span>Upload files…</span></button>
+        <button class="reset-btn" id="btnUploadFolder"><span>Upload a folder…</span></button>
+        <span class="browse-hint">…or drop them here. Use this for data anywhere on your computer — the list below only reaches the mounted workspace.</span>
+      </div>
+      <input type="file" id="uploadFiles" multiple hidden />
+      <input type="file" id="uploadFolder" webkitdirectory directory multiple hidden />
       <div class="browse-path" id="browsePath"></div>
       <div class="browse-list" id="browseList"></div>
       <div class="modal-foot">
@@ -259,6 +266,23 @@
         <span class="ca-spacer"></span>
         <button class="reset-btn" id="browseCancel"><span>Cancel</span></button>
         <button class="primary-btn" id="browseAttach"><span>Attach selected</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename project modal -->
+  <div class="modal-overlay hidden" id="renameModal">
+    <div class="modal modal-sm">
+      <div class="modal-head">
+        <span class="modal-title">Rename project</span>
+        <button class="modal-close" id="renameClose">✕</button>
+      </div>
+      <div class="modal-sub">The folder on disk is renamed too, unless that name is already taken.</div>
+      <input class="text-input" id="renameName" placeholder="Project name" />
+      <div class="modal-foot">
+        <span class="ca-spacer"></span>
+        <button class="reset-btn" id="renameCancel"><span>Cancel</span></button>
+        <button class="primary-btn" id="renameSave"><span>Rename</span></button>
       </div>
     </div>
   </div>

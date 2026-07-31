@@ -364,6 +364,9 @@
           if (!isActive) await selectProject(pj.id);
           openBrowse();
         } },
+      { label: 'Rename\u2026', icon: 'table',
+        disabled: state.running && isActive,
+        action: () => openRename(pj) },
       { label: (isActive && !collapsed.has(pj.id)) ? 'Collapse' : 'Open', icon: 'layers',
         action: () => { isActive ? toggleProjectOpen(pj.id) : selectProject(pj.id); } },
       { sep: true },
@@ -876,6 +879,83 @@
     loadBrowse('');
   }
   const closeBrowse = () => browseModal.classList.add('hidden');
+
+  // The container only sees the mounted workspace, so data kept anywhere else
+  // has to come in through the browser. One raw-body request per file.
+  async function uploadLocalFiles(fileList) {
+    if (!state.project || !fileList || !fileList.length) return;
+    const files = Array.from(fileList);
+    const count = $('#browseCount');
+    let ok = 0, bad = 0;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      count.textContent = `uploading ${i + 1}/${files.length} — ${f.name}`;
+      const q = `?name=${encodeURIComponent(f.name)}`
+              + `&rel=${encodeURIComponent(f.webkitRelativePath || f.name)}`;
+      try {
+        const r = await fetch(`/api/projects/${state.project.id}/upload${q}`,
+                              { method: 'POST', body: f });
+        if (!r.ok) throw new Error(r.statusText);
+        ok++;
+      } catch (e) { bad++; }
+    }
+    count.textContent = `${ok} uploaded${bad ? `, ${bad} failed` : ''}`;
+    closeBrowse();
+    await refreshTree();
+    addMsg({ kind: bad ? 'error' : 'system',
+             text: `Uploaded ${ok} file(s) to ${state.project.name}.`
+                   + (bad ? ` ${bad} failed.` : '') });
+    try {
+      const chk = await jget(`/api/projects/${state.project.id}/data_check`);
+      (chk.notices || []).forEach(n => addMsg({ kind: 'system', text: n }));
+    } catch (e) {}
+  }
+
+  $('#btnUploadFiles').addEventListener('click', () => $('#uploadFiles').click());
+  $('#btnUploadFolder').addEventListener('click', () => $('#uploadFolder').click());
+  ['#uploadFiles', '#uploadFolder'].forEach(sel =>
+    $(sel).addEventListener('change', e => {
+      const fl = e.target.files; e.target.value = ''; uploadLocalFiles(fl);
+    }));
+  ['dragenter', 'dragover'].forEach(ev => browseModal.addEventListener(ev, e => {
+    e.preventDefault(); browseModal.classList.add('dragging');
+  }));
+  browseModal.addEventListener('dragleave', e => {
+    if (e.target === browseModal) browseModal.classList.remove('dragging');
+  });
+  browseModal.addEventListener('drop', e => {
+    e.preventDefault();
+    browseModal.classList.remove('dragging');
+    uploadLocalFiles(e.dataTransfer.files);
+  });
+
+  // ---- rename a project -------------------------------------------------
+  const renameModal = $('#renameModal');
+  let renameTarget = null;
+  function openRename(pj) {
+    renameTarget = pj.id;
+    const inp = $('#renameName');
+    inp.value = pj.name || '';
+    renameModal.classList.remove('hidden');
+    setTimeout(() => { inp.focus(); inp.select(); }, 30);
+  }
+  async function doRename() {
+    const name = $('#renameName').value.trim();
+    if (!name || !renameTarget) return;
+    const res = await jpost(`/api/projects/${renameTarget}/rename`, { name });
+    renameModal.classList.add('hidden');
+    if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
+    if (res.notice) addMsg({ kind: 'system', text: res.notice });
+    renameTarget = null;
+    await loadProjects();
+    await selectProject(res.id);
+  }
+  $('#renameSave').addEventListener('click', doRename);
+  $('#renameCancel').addEventListener('click', () => renameModal.classList.add('hidden'));
+  $('#renameClose').addEventListener('click', () => renameModal.classList.add('hidden'));
+  $('#renameName').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); doRename(); }
+  });
   $('#btnAddData').addEventListener('click', openBrowse);
   $('#browseClose').addEventListener('click', closeBrowse);
   $('#browseCancel').addEventListener('click', closeBrowse);

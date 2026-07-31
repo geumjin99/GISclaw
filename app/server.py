@@ -42,6 +42,7 @@ import os
 import queue
 import re
 import shutil
+import unicodedata
 import sys
 import threading
 import time
@@ -312,8 +313,19 @@ def _safe_join(root: str, *parts: str) -> str:
 
 
 def _slug(name: str) -> str:
-    s = re.sub(r"[^a-zA-Z0-9_-]+", "_", name.strip()).strip("_")
-    return s or "project"
+    """A folder name that is safe on every platform but still readable.
+
+    Non-ASCII is kept deliberately: the old rule stripped it, so a project
+    called 城市热岛分析 collapsed to "project" and the next one collided with
+    it. Only characters a filesystem or shell would object to are replaced.
+    Applying this to its own output must not change it — project ids are
+    re-slugged on every lookup.
+    """
+    s = unicodedata.normalize("NFC", name).strip()
+    s = re.sub(r'[\x00-\x1f<>:"/\\|?*]+', "_", s)
+    s = re.sub(r"\s+", "_", s)
+    s = s.strip("._ ")
+    return s[:80] or "project"
 
 
 # ============================================================
@@ -1230,6 +1242,120 @@ def _serve_geo_or_image(fpath: str):
             return JSONResponse({"content": f.read()[:20000]})
     except Exception:
         return FileResponse(fpath)
+
+
+@app.post("/api/projects/{pid}/rename")
+async def api_rename_project(pid: str, request: Request):
+    """Change a project's display name, and its folder when that is safe.
+
+    The folder is what you see in Finder or Explorer, so leaving it on the old
+    slug after a rename is quietly confusing. It moves too, unless the new name
+    is already taken.
+    """
+    pdir = _project_dir(pid)
+    if not os.path.isdir(pdir):
+        return JSONResponse({"error": "project not found"}, status_code=404)
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"error": "name required"}, status_code=400)
+
+    m = _read_manifest(pdir)
+    m["name"] = name
+    _write_manifest(pdir, m)
+
+    want = _slug(name)
+    if want == pid:
+        return {"id": pid, "name": name, "folder_renamed": False}
+    try:
+        target = _safe_join(WORKSPACE, want)
+    except ValueError:
+        return {"id": pid, "name": name, "folder_renamed": False,
+                "notice": "Renamed, but the folder kept its old name."}
+    if os.path.exists(target):
+        return {"id": pid, "name": name, "folder_renamed": False,
+                "notice": f"Renamed, but the folder stayed as '{pid}': "
+                          f"'{want}' is already in use."}
+    try:
+        os.rename(pdir, target)
+    except OSError as e:
+        log.warning(f"rename {pid} -> {want} failed: {e}")
+        return {"id": pid, "name": name, "folder_renamed": False,
+                "notice": f"Renamed, but the folder stayed as '{pid}' ({e})."}
+    log.info(f"renamed project {pid} -> {want} ({name})")
+    return {"id": want, "name": name, "folder_renamed": True}
+
+
+@app.post("/api/projects/{pid}/upload")
+async def api_upload(pid: str, request: Request, name: str = "", rel: str = ""):
+    """Take one file straight from the browser into the project's data/.
+
+    The container can only see the mounted workspace, so data living anywhere
+    else on your computer has to arrive this way. The body is the raw file
+    rather than a multipart form: that keeps the dependency list unchanged
+    (python-multipart is not installed) and lets a large raster stream to disk
+    instead of being held in memory.
+    """
+    pdir = _project_dir(pid)
+    if not os.path.isdir(pdir):
+        return JSONResponse({"error": "project not found"}, status_code=404)
+    _project_layout(pdir)
+    data_dir = os.path.join(pdir, "data")
+
+    # A folder upload supplies a relative path; keep its shape, drop anything odd.
+    parts = [p for p in (rel or name).replace("\\", "/").split("/")
+             if p not in ("", ".", "..")]
+    if not parts:
+        return JSONResponse({"error": "no filename"}, status_code=400)
+    try:
+        dst = _safe_join(data_dir, "/".join(parts))
+    except ValueError:
+        return JSONResponse({"error": "invalid path"}, status_code=400)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+
+    written = 0
+    try:
+        with open(dst, "wb") as f:
+            async for chunk in request.stream():
+                f.write(chunk)
+                written += len(chunk)
+    except Exception as e:
+        log.error(f"upload {parts} failed: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+    log.info(f"[{pid}] uploaded {'/'.join(parts)} ({written} bytes)")
+    return {"saved": "/".join(parts), "bytes": written}
+
+
+@app.get("/api/projects/{pid}/data_check")
+async def api_data_check(pid: str):
+    """Report shapefiles in data/ that are missing the files they need.
+
+    A file dialog makes it easy to pick only the .shp and leave .shx/.dbf/.prj
+    behind, which yields a layer nothing can open. Checked after the fact so the
+    order files arrive in does not matter.
+    """
+    pdir = _project_dir(pid)
+    data_dir = os.path.join(pdir, "data")
+    notices = []
+    if os.path.isdir(data_dir):
+        for root, _dirs, files in os.walk(data_dir):
+            lower = {f.lower() for f in files}
+            for f in sorted(files):
+                if not f.lower().endswith(".shp"):
+                    continue
+                stem = f[:-4].lower()
+                missing = [e for e in (".shx", ".dbf") if stem + e not in lower]
+                if missing:
+                    notices.append(
+                        f"{f}: missing {' and '.join(missing)}. A shapefile cannot "
+                        "be opened without them \u2014 select every file of the set, "
+                        "or the folder holding them.")
+                elif stem + ".prj" not in lower:
+                    notices.append(
+                        f"{f}: no .prj, so the layer declares no coordinate system. "
+                        "It may sit in the wrong place on the map, and the agent "
+                        "will see CRS = None.")
+    return {"notices": notices}
 
 
 @app.get("/api/projects/{pid}/file")
