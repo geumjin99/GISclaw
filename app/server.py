@@ -795,9 +795,18 @@ async def api_settings():
         "providers": STORE.providers_public(),
         "models": STORE.models_public(),
         "memory_enabled": STORE.memory_enabled(),
+        "viewer_follow": STORE.viewer_follow(),
         "settings_path": STORE.path,
         "memory_path": STORE.memory_path,
     }
+
+
+@app.post("/api/settings/viewer_follow")
+async def api_set_viewer_follow(request: Request):
+    """Toggle whether the viewer follows the agent between tabs."""
+    body = await request.json()
+    STORE.set_viewer_follow(bool(body.get("enabled", True)))
+    return {"enabled": STORE.viewer_follow()}
 
 
 @app.post("/api/settings/providers/{provider_id}")
@@ -1450,6 +1459,106 @@ async def api_data_check(pid: str):
                         "It may sit in the wrong place on the map, and the agent "
                         "will see CRS = None.")
     return {"notices": notices}
+
+
+ARCHIVE_DIR = "_archived"
+
+
+def _archive_root() -> str:
+    d = os.path.join(WORKSPACE, ARCHIVE_DIR)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+@app.post("/api/projects/{pid}/archive")
+async def api_archive_project(pid: str):
+    """Move a project out of the workspace, keeping it on disk.
+
+    Not a delete: the folder is moved under _archived/ so it stops appearing in
+    the project list and stops being reachable by the agent, while everything —
+    data, outputs, run history, journal — stays exactly where it can be brought
+    back from.
+    """
+    pdir = _project_dir(pid)
+    if not os.path.isdir(pdir):
+        return JSONResponse({"error": "project not found"}, status_code=404)
+    dst = os.path.join(_archive_root(), os.path.basename(pdir))
+    if os.path.exists(dst):
+        return JSONResponse(
+            {"error": f"an archived project named '{os.path.basename(pdir)}' "
+                      "already exists — rename one of them first"}, status_code=409)
+    try:
+        shutil.move(pdir, dst)
+    except OSError as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    log.info(f"archived project {pid}")
+    return {"ok": True, "id": pid, "projects": _list_projects()}
+
+
+@app.get("/api/archived")
+async def api_list_archived():
+    """Projects sitting in _archived/, ready to be brought back."""
+    root = _archive_root()
+    out = []
+    for name in sorted(os.listdir(root)):
+        pdir = os.path.join(root, name)
+        if not os.path.isdir(pdir):
+            continue
+        if not os.path.exists(os.path.join(pdir, "project.json")):
+            continue
+        m = _read_manifest(pdir)
+        data_dir = os.path.join(pdir, "data")
+        runs_dir = os.path.join(pdir, "runs")
+        out.append({
+            "id": name,
+            "name": m.get("name", name),
+            "created_at": m.get("created_at", ""),
+            "data_count": len(os.listdir(data_dir)) if os.path.isdir(data_dir) else 0,
+            "run_count": len(os.listdir(runs_dir)) if os.path.isdir(runs_dir) else 0,
+        })
+    return out
+
+
+@app.post("/api/archived/{pid}/restore")
+async def api_restore_project(pid: str):
+    """Bring an archived project back into the workspace."""
+    try:
+        src = _safe_join(_archive_root(), _slug(pid))
+    except ValueError:
+        return JSONResponse({"error": "invalid id"}, status_code=400)
+    if not os.path.isdir(src):
+        return JSONResponse({"error": "not archived"}, status_code=404)
+    dst = _project_dir(pid)
+    if os.path.exists(dst):
+        return JSONResponse(
+            {"error": f"'{os.path.basename(dst)}' already exists in the workspace "
+                      "— rename it before restoring"}, status_code=409)
+    try:
+        shutil.move(src, dst)
+    except OSError as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    log.info(f"restored project {pid}")
+    return {"ok": True, "id": pid, "projects": _list_projects()}
+
+
+@app.get("/api/projects/{pid}/export")
+async def api_export_project(pid: str):
+    """Download the whole project as a zip — for moving it to another machine."""
+    import io
+    import zipfile
+    pdir = _project_dir(pid)
+    if not os.path.isdir(pdir):
+        return JSONResponse({"error": "project not found"}, status_code=404)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for root, _dirs, files in os.walk(pdir):
+            for fn in files:
+                full = os.path.join(root, fn)
+                z.write(full, os.path.join(
+                    os.path.basename(pdir), os.path.relpath(full, pdir)))
+    log.info(f"exported project {pid}")
+    return Response(content=buf.getvalue(), media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="{_slug(pid)}.zip"'})
 
 
 @app.get("/api/projects/{pid}/file")

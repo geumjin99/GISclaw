@@ -317,6 +317,7 @@
     else if (act === 'note') { openJournal().then(addJournalNote); }
     else if (act === 'newthread') newThread();
     else if (act === 'about') openAbout();
+    else if (act === 'archived') openArchived();
   }
   $$('#menubar .menu').forEach(menu => {
     const btn = menu.querySelector('.menu-btn');
@@ -367,6 +368,12 @@
       { label: 'Rename\u2026', icon: 'table',
         disabled: state.running && isActive,
         action: () => openRename(pj) },
+      { sep: true },
+      { label: 'Export as zip', icon: 'box',
+        action: () => { window.location = `/api/projects/${pj.id}/export`; } },
+      { label: 'Archive\u2026', icon: 'layers',
+        disabled: state.running && isActive,
+        action: () => archiveProject(pj) },
       { label: (isActive && !collapsed.has(pj.id)) ? 'Collapse' : 'Open', icon: 'layers',
         action: () => { isActive ? toggleProjectOpen(pj.id) : selectProject(pj.id); } },
       { sep: true },
@@ -375,6 +382,13 @@
           openJournal();
         } },
     ]);
+  }
+
+  async function loadViewerFollow() {
+    try {
+      const s = await jget('/api/settings');
+      state.viewerFollow = s.viewer_follow !== false;
+    } catch (e) { state.viewerFollow = true; }
   }
 
   async function loadProjects() {
@@ -508,7 +522,7 @@
   // Chat + counters
   // ==================================================================
   const chatScroll = $('#chatScroll');
-  const KIND_LABELS = { user: 'You', thought: 'Thought', action: 'Action', observe: 'Observation', error: 'Issue', finish: 'Done', system: 'Info' };
+  const KIND_LABELS = { user: 'You', thought: 'Thought', action: 'Action', observe: 'Observation', error: 'Issue', finish: 'Done', answer: 'Answer', system: 'Info' };
   function nowTime() { const d = new Date(); return d.toTimeString().slice(0, 8); }
   function addMsg({ kind, text, html }) {
     const m = document.createElement('div');
@@ -523,6 +537,62 @@
     chatScroll.scrollTop = chatScroll.scrollHeight;
     return m;
   }
+  // ---- reasoning bubble ---------------------------------------------------
+  // Thought / Action / Observation used to be posted as ordinary messages, so a
+  // twenty-round run buried its own answer under sixty entries. They go into
+  // one live bubble instead: open and streaming while the agent works, folded
+  // away when it finishes so the answer is what you see. Click to reopen.
+  function openTrace() {
+    closeTraceEl(state.traceEl);        // never leave a previous one live
+    const wrap = document.createElement('div');
+    wrap.className = 'trace open';
+    wrap.innerHTML =
+      '<div class="trace-head">'
+      + '<span class="trace-caret"></span>'
+      + '<span class="trace-title">Working\u2026</span>'
+      + '<span class="trace-sub"></span>'
+      + '</div><div class="trace-body"></div>';
+    wrap.querySelector('.trace-head').addEventListener('click', () => {
+      wrap.classList.toggle('open');
+    });
+    chatScroll.appendChild(wrap);
+    chatScroll.scrollTop = chatScroll.scrollHeight;
+    state.traceEl = wrap;
+    state.traceCount = 0;
+    return wrap;
+  }
+
+  function traceAdd(kind, text, html) {
+    const wrap = state.traceEl || openTrace();
+    const row = document.createElement('div');
+    row.className = 'trace-row trace-' + kind;
+    row.innerHTML = `<span class="trace-tag">${KIND_LABELS[kind] || kind}</span>`
+      + `<span class="trace-text">${html || esc(text || '')}</span>`;
+    wrap.querySelector('.trace-body').appendChild(row);
+    state.traceCount++;
+    // The one-line summary in the header is what you read while it runs.
+    const first = (text || '').split('\n')[0].slice(0, 90);
+    if (first) wrap.querySelector('.trace-sub').textContent = first;
+    if (wrap.classList.contains('open')) chatScroll.scrollTop = chatScroll.scrollHeight;
+    return row;
+  }
+
+  function closeTraceEl(wrap, label) {
+    if (!wrap) return;
+    wrap.classList.remove('open');
+    wrap.querySelector('.trace-sub').textContent = '';
+    if (label) wrap.querySelector('.trace-title').textContent = label;
+  }
+
+  function closeTrace(done) {
+    const wrap = state.traceEl;
+    if (!wrap) return;
+    const n = state.traceCount || 0;
+    const secs = done && done.elapsed_s ? ` \u00b7 ${done.elapsed_s}s` : '';
+    closeTraceEl(wrap, `Reasoning \u00b7 ${n} step${n === 1 ? '' : 's'}${secs}`);
+    state.traceEl = null;
+  }
+
   function setStatus(text, klass) {
     $('#statusText').textContent = text;
     $('.status').classList.remove('running', 'done');
@@ -546,6 +616,14 @@
   }
 
   // Tabs
+  // A tab change the agent caused, as opposed to one the user asked for.
+  // Clicking a layer or a file should always take you there; the run pulling
+  // the view around while you are reading something else should be optional.
+  function followTab(name) {
+    if (state.viewerFollow === false) return;
+    switchTab(name);
+  }
+
   function switchTab(name) {
     $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     $('#mapView').classList.toggle('hidden', name !== 'map');
@@ -719,6 +797,7 @@
 
     const rid = ++state.runId;
     state.running = true;
+    state.traceEl = null; state.traceCount = 0;
     resetRunUI();
     // Echo the prompt as the user's own turn, then clear the box — otherwise the
     // text sits there and the next run silently re-sends it.
@@ -780,22 +859,29 @@
       const ex = extOf(msg.filename);
       if (ex === 'tif' || ex === 'tiff') {
         addRasterOverlay(msg.filename, `/api/projects/${state.project.id}/overlay?run=${encodeURIComponent(msg.run_id)}&path=${encodeURIComponent(msg.filename)}`);
-      } else if (IMG_EXT.includes(ex)) openImageView(msg.filename, msg.url);
+      } else if (IMG_EXT.includes(ex)) { if (state.viewerFollow !== false) openImageView(msg.filename, msg.url); }
       else if (GEO_EXT.includes(ex)) addResultGeoToMap(msg.url, msg.filename);
       return;
     }
     if (ev === 'done') { finishRun(rid, msg.success, null, msg); return; }
     if (ev === 'step') {
-      if (msg.thought) addMsg({ kind: 'thought', text: msg.thought });
+      // The closing summary is the answer, not a step — it goes outside the
+      // bubble, in full, where the reader will actually see it.
+      const isFinish = /^finish\b/.test(msg.action || '');
+      if (msg.thought) traceAdd('thought', msg.thought);
       if (msg.action) {
         bumpStep();
-        addMsg({ kind: 'action', html: `<code>${esc(msg.action)}</code>` });
+        traceAdd('action', null, `<code>${esc(msg.action)}</code>`);
       }
-      if (msg.code) { switchTab('code'); appendCode(msg.code); }
+      if (msg.code) { followTab('code'); appendCode(msg.code); }
       if (msg.observation) {
-        const obs = msg.observation.slice(0, 600);
-        addMsg({ kind: msg.success ? 'observe' : 'error', text: obs });
-        if (msg.code) showStdout(obs, msg.success);
+        if (isFinish) {
+          addMsg({ kind: 'answer', text: msg.observation });
+        } else {
+          const obs = msg.observation.slice(0, 600);
+          traceAdd(msg.success ? 'observe' : 'error', obs);
+          if (msg.code) showStdout(obs, msg.success);
+        }
       }
       return;
     }
@@ -817,6 +903,7 @@
       setStatus('Idle', '');
       return;                       // answered from the record; nothing was run
     }
+    closeTrace(done);
     if (done) {
       setSelfCorr(done.self_corrections || 0);
       addMsg({ kind: 'finish', html: `Finished in <b>${done.elapsed_s}s</b> · ${done.rounds} rounds · ${(done.output_files || []).length} output(s)` });
@@ -932,6 +1019,56 @@
     browseModal.classList.remove('dragging');
     uploadLocalFiles(e.dataTransfer.files);
   });
+
+  // ---- archive / restore -------------------------------------------------
+  // Archiving is a move, not a delete: the folder goes under _archived/ so it
+  // leaves the list and the agent's reach with every file intact.
+  async function archiveProject(pj) {
+    const res = await jpost(`/api/projects/${pj.id}/archive`, {});
+    if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
+    addMsg({ kind: 'system',
+             text: `Archived "${pj.name}". Nothing was deleted — bring it back from `
+                   + `Project → Archived projects.` });
+    if (state.project && state.project.id === pj.id) { state.project = null; clearMap(); }
+    await loadProjects();
+  }
+
+  const archivedModal = $('#archivedModal');
+  const closeArchived = () => archivedModal.classList.add('hidden');
+  $('#archivedClose').addEventListener('click', closeArchived);
+  $('#archivedDone').addEventListener('click', closeArchived);
+
+  async function openArchived() {
+    const list = $('#archivedList');
+    list.innerHTML = '<div class="tree-hint-item">Loading…</div>';
+    archivedModal.classList.remove('hidden');
+    let rows = [];
+    try { rows = await jget('/api/archived'); } catch (e) { rows = []; }
+    if (!rows.length) {
+      list.innerHTML = '<div class="tree-hint-item">Nothing archived yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    rows.forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'browse-row';
+      row.innerHTML = `<span class="browse-ic">${ICONS.folder}</span>`
+        + `<span class="browse-name">${esc(r.name)}</span>`
+        + `<span class="browse-size">${r.data_count} file(s) · ${r.run_count} run(s)</span>`;
+      const btn = document.createElement('button');
+      btn.className = 'mini-btn'; btn.textContent = 'Restore';
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const res = await jpost(`/api/archived/${r.id}/restore`, {});
+        if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
+        addMsg({ kind: 'system', text: `Restored "${r.name}".` });
+        await loadProjects();
+        openArchived();
+      });
+      row.appendChild(btn);
+      list.appendChild(row);
+    });
+  }
 
   // ---- rename a project -------------------------------------------------
   const renameModal = $('#renameModal');
@@ -1412,6 +1549,11 @@
        </span>`).join('');
     renderSkills();
   }
+  $('#viewerFollow').addEventListener('change', async e => {
+    state.viewerFollow = e.target.checked;
+    await jpost('/api/settings/viewer_follow', { enabled: e.target.checked });
+  });
+
   $('#skillAuto').addEventListener('change', async e => {
     skillsInfo = await jsend('/api/skills/auto', { enabled: e.target.checked });
     renderSkills();
@@ -1597,6 +1739,7 @@
     const mem = await jget('/api/memory');
     $('#memText').value = mem.text || '';
     $('#memEnabled').checked = !!mem.enabled;
+    $('#viewerFollow').checked = state.viewerFollow !== false;
   }
   $('#memSave').addEventListener('click', async () => {
     const st = $('#memStatus');
@@ -1822,11 +1965,18 @@
     if (res.error) { addMsg({ kind: 'error', text: `No trace stored for ${runId}.` }); return; }
     addDivider(`replay · ${runId}`);
     (res.events || []).forEach(ev => {
-      if (ev.thought) addMsg({ kind: 'thought', text: ev.thought }).classList.add('msg-history');
-      if (ev.action) addMsg({ kind: 'action', html: `<code>${esc(ev.action)}</code>` }).classList.add('msg-history');
+      if (ev.thought) traceAdd('thought', ev.thought);
+      if (ev.action) traceAdd('action', null, `<code>${esc(ev.action)}</code>`);
       const obs = ev.observation_full || ev.observation;
-      if (obs) addMsg({ kind: ev.success === false ? 'error' : 'observe', text: String(obs).slice(0, 600) }).classList.add('msg-history');
+      if (obs) {
+        if (/^finish\b/.test(ev.action || '')) addMsg({ kind: 'answer', text: String(obs) });
+        else traceAdd(ev.success === false ? 'error' : 'observe', String(obs).slice(0, 600));
+      }
     });
+    if (state.traceEl) {
+      closeTraceEl(state.traceEl, `Reasoning \u00b7 ${state.traceCount || 0} steps`);
+      state.traceEl = null;
+    }
     if (res.code) { resetCode(); appendCode(res.code); switchTab('code'); }
     addDivider('end of replay');
     chatScroll.scrollTop = chatScroll.scrollHeight;
@@ -1851,6 +2001,7 @@
   }
 
   async function init() {
+    await loadViewerFollow();
     const haveModel = await refreshModelSelect();
     await loadProjects();
     renderLegend();

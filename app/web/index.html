@@ -21,7 +21,7 @@
   <title>GISclaw — GIS Analyst Agent</title>
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js"></script>
-  <link rel="stylesheet" href="style.css?v=17" />
+  <link rel="stylesheet" href="style.css?v=21" />
 </head>
 <body>
   <div class="app">
@@ -55,6 +55,8 @@
           <div class="menu-item" data-act="journal">Journal (full record)…</div>
           <div class="menu-item" data-act="note">Add note to journal…</div>
           <div class="menu-item" data-act="newthread">Start a new conversation</div>
+          <div class="menu-sep"></div>
+          <div class="menu-item" data-act="archived">Archived projects…</div>
         </div>
       </div>
       <div class="menu" data-menu="tools">
@@ -270,6 +272,24 @@
     </div>
   </div>
 
+  <!-- Archived projects -->
+  <div class="modal-overlay hidden" id="archivedModal">
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title">Archived projects</span>
+        <button class="modal-close" id="archivedClose">✕</button>
+      </div>
+      <div class="modal-sub">
+        Archiving moves a project out of the workspace but keeps every file. Restore brings it back.
+      </div>
+      <div class="browse-list" id="archivedList"></div>
+      <div class="modal-foot">
+        <span class="ca-spacer"></span>
+        <button class="reset-btn" id="archivedDone"><span>Close</span></button>
+      </div>
+    </div>
+  </div>
+
   <!-- Rename project modal -->
   <div class="modal-overlay hidden" id="renameModal">
     <div class="modal modal-sm">
@@ -441,6 +461,9 @@
           Stored in <code id="memPath">…</code>.
         </div>
         <label class="mem-toggle"><input type="checkbox" id="memEnabled" /> <span>Apply memory to runs</span></label>
+        <label class="mem-toggle"><input type="checkbox" id="viewerFollow" />
+          <span>Follow the agent between Map, Code and Result while it works
+            <i>(off keeps the tab you chose)</i></span></label>
         <textarea id="memText" class="mem-text" spellcheck="false"></textarea>
         <div class="modal-foot">
           <span class="tf-status" id="memStatus"></span>
@@ -470,6 +493,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>

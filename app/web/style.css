@@ -708,3 +708,38 @@ body.col-resizing iframe, body.col-resizing .leaflet-container { pointer-events:
 /* A picked file should look picked, not just have a ticked box. */
 .browse-row { cursor:pointer; }
 .browse-row.picked { background:var(--accent-soft); }
+
+/* Reasoning bubble — one collapsible block per run, so the answer isn't
+   buried under sixty Thought/Action/Observation entries. */
+.trace { border:1px solid var(--line-soft); border-radius:var(--radius);
+         background:var(--panel-sink); margin:8px 0; overflow:hidden; }
+.trace-head { display:flex; align-items:center; gap:7px; padding:7px 10px;
+              cursor:pointer; user-select:none; font-size:11.5px;
+              color:var(--ink-soft); }
+.trace-head:hover { background:var(--accent-soft); }
+.trace-caret { width:0; height:0; border-left:5px solid var(--ink-muted);
+               border-top:4px solid transparent; border-bottom:4px solid transparent;
+               transition:transform .15s ease; flex:0 0 auto; }
+.trace.open .trace-caret { transform:rotate(90deg); }
+.trace-title { font-weight:600; color:var(--ink); flex:0 0 auto; }
+.trace-sub { color:var(--ink-muted); overflow:hidden; text-overflow:ellipsis;
+             white-space:nowrap; flex:1 1 auto; font-style:italic; }
+.trace-body { display:none; padding:2px 10px 8px; border-top:1px solid var(--line-soft);
+              max-height:420px; overflow-y:auto; }
+.trace.open .trace-body { display:block; }
+.trace-row { display:flex; gap:8px; padding:5px 0; font-size:12px;
+             border-bottom:1px dotted var(--line-soft); }
+.trace-row:last-child { border-bottom:none; }
+.trace-tag { flex:0 0 74px; font-size:10px; text-transform:uppercase;
+             letter-spacing:.04em; color:var(--ink-muted); padding-top:1px; }
+.trace-action .trace-tag { color:var(--warm); }
+.trace-observe .trace-tag { color:var(--ok); }
+.trace-error .trace-tag { color:var(--danger); }
+.trace-text { flex:1 1 auto; white-space:pre-wrap; word-break:break-word;
+              color:var(--ink-soft); }
+.trace-text code { font-family:var(--font-mono); font-size:11px; color:var(--warm); }
+
+/* The answer — the one thing that must not end up folded away. */
+.msg-answer { border-left:3px solid var(--accent); padding-left:11px; }
+.msg-answer .agent-tag { background:var(--accent); color:#F5F2EB; }
+.msg-answer .msg-body { white-space:pre-wrap; }

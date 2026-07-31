@@ -400,6 +400,19 @@ class SettingsStore:
         data["compact_log"] = bool(on)
         self.save(data)
 
+    def viewer_follow(self) -> bool:
+        """Whether the viewer follows the agent between Map, Code and Result.
+
+        On by default — watching it work is most of the appeal. Off keeps the
+        tab you chose, for reading one thing while the run continues.
+        """
+        return bool(self.load().get("viewer_follow", True))
+
+    def set_viewer_follow(self, on: bool):
+        data = self.load()
+        data["viewer_follow"] = bool(on)
+        self.save(data)
+
     def skills_auto(self) -> bool:
         """Pre-load a matching skill server-side (models rarely self-invoke)."""
         return bool(self.load().get("skills_auto", True))
