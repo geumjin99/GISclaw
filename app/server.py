@@ -425,6 +425,37 @@ def init_llm(cfg: dict):
 # ============================================================
 # Agent run in a thread, streamed via queue + on_step callback
 # ============================================================
+class ApiCallFailed(RuntimeError):
+    """The model provider refused or could not be reached."""
+
+
+# Every engine reports transport and auth failures by *returning* them as the
+# model's text. The ReAct loop then treats "Error code: 401 ..." as a badly
+# formatted reply, retries until it runs out of rounds, and the run ends having
+# produced nothing and explained nothing. One failed call is enough to know the
+# run cannot proceed, so turn it into an exception the caller can report.
+_ENGINE_ERROR_PREFIXES = (
+    "Error during Claude API call:", "Error during API call:",
+    "Error during Ollama call:", "Error during generation:",
+    "Error: API client not initialized", "Error: Ollama client not initialized",
+    "Error: Model not loaded",
+)
+
+
+def _guard_engine(llm):
+    inner = llm.generate
+
+    def generate(*a, **kw):
+        r = inner(*a, **kw)
+        text = (r or {}).get("text", "")
+        if isinstance(text, str) and text.startswith(_ENGINE_ERROR_PREFIXES):
+            raise ApiCallFailed(text)
+        return r
+
+    llm.generate = generate
+    return llm
+
+
 def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: queue.Queue):
     recorder = None
     try:
@@ -456,7 +487,7 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
 
         msg_queue.put({"type": "status", "content": f"Initializing {cfg['display']}...", "run_id": run_id})
 
-        llm = init_llm(cfg)
+        llm = _guard_engine(init_llm(cfg))
 
         # Intent gate: a question about the project shouldn't become an analysis
         # run. The agent's finish-guard demands output files, so without this a
@@ -656,6 +687,34 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
             "elapsed_s": round(elapsed, 1),
             "cost": cost_info,
         })
+    except ApiCallFailed as e:
+        # Say what actually happened. A rejected key used to end as a run that
+        # simply produced nothing, which reads like the software is broken.
+        detail = str(e)
+        hint = ("The provider rejected the key. Open Settings \u2192 API keys, "
+                "re-paste it and press Test." if "401" in detail
+                or "authentication" in detail.lower() or "invalid x-api-key" in detail
+                else "Check the key and your connection, then try again.")
+        log.error(f"run aborted, provider call failed: {detail}")
+        if recorder:
+            recorder.log(f"API FAILED {detail}")
+        try:
+            pdir_err = _project_dir(pid)
+            if os.path.isdir(pdir_err):
+                journal.append_chat(pdir_err, {
+                    "role": "agent", "model": model_key, "ask": instruction,
+                    "success": False, "error": detail, "outputs": [],
+                    "rounds": 0, "self_corrections": 0, "elapsed_s": 0,
+                })
+        except Exception:
+            pass
+        msg_queue.put({"type": "error",
+                       "content": f"{cfg.get('display', model_key)} could not be "
+                                  f"reached.\n\n{detail}\n\n{hint}"})
+        msg_queue.put({"type": "done", "run_id": run_id, "success": False,
+                       "output_files": [], "rounds": 0, "self_corrections": 0,
+                       "elapsed_s": 0, "cost": {}})
+        return
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
