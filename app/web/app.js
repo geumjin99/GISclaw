@@ -22,7 +22,6 @@
    ========================================================================== */
 (() => {
   'use strict';
-  console.log('%cGISclaw app.js v12 loaded (records in tree)', 'color:#2b8a3e;font-weight:bold');
   const $  = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const sleep = ms => new Promise(r => setTimeout(r, ms));

@@ -24,10 +24,9 @@ Design:
 """
 import io
 import os
-import sys
 import traceback
 from contextlib import redirect_stdout, redirect_stderr
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict
 
 
 class ExecutionResult:
@@ -105,10 +104,8 @@ import warnings
 warnings.filterwarnings('ignore')
 os.makedirs('pred_results', exist_ok=True)
 """
-        # Switch to working directory
-        original_dir = os.getcwd()
         os.chdir(self.work_dir)
-        
+
         try:
             exec(init_code, self.namespace)
             self._known_vars = set(self.namespace.keys())
@@ -120,11 +117,10 @@ os.makedirs('pred_results', exist_ok=True)
     def execute(self, code: str) -> ExecutionResult:
         """Execute code snippet in persistent namespace"""
         import time
-        import threading
-        
+
         # Import blocker: intercept unavailable packages before execution
         BLOCKED_PACKAGES = {
-            'arcpy': 'Use geopandas + rasterio + shapely instead. Call search_docs("arcpy alternative") for guidance.',
+            'arcpy': 'Use geopandas + rasterio + shapely instead.',
             'pykrige': 'Use scipy.interpolate.griddata or scipy.interpolate.Rbf instead.',
             'skimage': 'Use scipy.ndimage or numpy for image processing.',
         }
@@ -153,29 +149,23 @@ os.makedirs('pred_results', exist_ok=True)
         
         t0 = time.time()
         success = True
-        timed_out = False
         
         # Switch to working directory
         original_dir = os.getcwd()
         os.chdir(self.work_dir)
         
-        # Thread-safe timeout mechanism
-        timer = threading.Timer(self.timeout, lambda: None)
-        timer.start()
-        
         try:
             with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
                 exec(code, self.namespace)
-        except Exception as e:
+        except Exception:
             success = False
             stderr_buf.write(traceback.format_exc())
         finally:
             elapsed = time.time() - t0
-            timer.cancel()
             os.chdir(original_dir)
-            # Check for timeout
+            # Reported after the fact: the snippet runs in this thread, so it
+            # cannot be interrupted part-way.
             if elapsed > self.timeout:
-                timed_out = True
                 success = False
                 stderr_buf.write(f"\n⏰ Execution took {elapsed:.1f}s, exceeding limit of {self.timeout}s")
         

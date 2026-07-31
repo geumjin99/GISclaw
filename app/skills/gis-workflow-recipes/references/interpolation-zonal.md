@@ -20,10 +20,11 @@ unit (census block, district, parcel).
    - "continuous surface", "map of the whole area", or polygons with no points
      inside them → you need interpolation.
 
-4. **Interpolate** (only if step 3 says so). Use the `idw` geoprocess op, or
-   Kriging via `pykrige` in `execute()` when the task names it. Set the output
-   resolution deliberately: aim for roughly 100–500 cells across the study area
-   extent, not "whatever the default is".
+4. **Interpolate** (only if step 3 says so). Use the `idw` geoprocess op. For a
+   smoother surface, `scipy.interpolate.griddata` or `Rbf` in `execute()`;
+   `pykrige` is not installed. Set the output resolution deliberately: aim for
+   roughly 100–500 cells across the study area extent, not "whatever the
+   default is".
 
 5. **Summarise per polygon** with the `zonal_statistics` op against the raster,
    or `spatial_join` + group-by for the exact-points route.

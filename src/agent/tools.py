@@ -21,9 +21,27 @@ Design:
 - All tools return plain-text Observations
 """
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from . import geo_ops
+
+
+def _salvage_summary(extra: dict) -> str:
+    """Pull a summary out of mis-parsed finish arguments, or return ''."""
+    import json
+    for key, value in extra.items():
+        for candidate in (key, value):
+            if not isinstance(candidate, str):
+                continue
+            try:
+                parsed = json.loads(candidate)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if isinstance(parsed, dict) and parsed.get("summary"):
+                return str(parsed["summary"])
+        if isinstance(key, str) and len(key) > 20:
+            return key          # last resort: raw text beats nothing
+    return ""
 
 
 class GISToolkit:
@@ -285,8 +303,17 @@ _src.close()
         """Check variable state"""
         return self.sandbox.inspect(var_name)
     
-    def finish(self, summary: str = "") -> str:
-        """Mark task as complete"""
+    def finish(self, summary: str = "", **extra) -> str:
+        """Mark task as complete.
+
+        Long markdown summaries arrive as `Args: {"summary": "…"}` with
+        embedded newlines, and when that fails to parse the whole JSON string
+        turns up as a single keyword *name*. Rather than end the run on an
+        argument error and lose the agent's closing write-up — often the only
+        place a caveat is stated — take the extra keywords and salvage it.
+        """
+        if not summary and extra:
+            summary = _salvage_summary(extra)
         # Collect output files
         pred_dir = os.path.join(self.sandbox.work_dir, "pred_results")
         output_files = []
@@ -296,7 +323,7 @@ _src.close()
                 size = os.path.getsize(fpath) / 1024
                 output_files.append(f"{f} ({size:.1f} KB)")
         
-        result = f"📋 Task complete\n"
+        result = "Task complete\n"
         if summary:
             result += f"Summary: {summary}\n"
         if output_files:

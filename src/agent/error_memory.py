@@ -13,33 +13,41 @@
 # <https://www.gnu.org/licenses/>, for more details.
 
 """
-跨题错误记忆 — 前面题的修复经验自动传递给后面的题
+What went wrong once, and what fixed it.
+
+Scoped to a single run: when a tool call fails, the loop looks the error up
+here and passes the suggestion back with the observation, so the model is not
+left rediscovering the same trap. Fixes it finds itself are recorded as it
+goes.
 """
 
+
 class ErrorMemory:
-    """运行时错误→修复 映射表"""
+    """A small error-pattern -> suggested-fix table."""
 
     def __init__(self):
-        self._memory = {}
-        # 预置一些已知的常见错误
-        self._memory.update({
-            "has no attribute 'read'": "load_raster 返回 ndarray 而非 DatasetReader。需要 .read() 时用 rasterio.open() 代替。",
-            "geoplot": "Use geoplot with matplotlib backend (Agg). If projection errors occur, try gcrs.PlateCarree() instead of AlbersEqualArea().",
-            "has no attribute 'crs'": "unary_union 返回 Shapely Geometry，没有 crs 属性。用 gpd.GeoDataFrame(geometry=[...], crs=gdf.crs) 包装。",
-            "MemoryError": "数据量太大导致内存溢出。对输入数据降采样: gdf_sample = gdf.sample(n=10000, random_state=42)",
-            "ForwardCompatibility": "NVIDIA driver 问题，忽略此错误。",
-        })
+        # Traps seen often enough to be worth stating up front.
+        self._memory = {
+            "has no attribute 'read'":
+                "load_raster gives you an ndarray, not a DatasetReader. Open the "
+                "file with rasterio.open() if you need .read().",
+            "has no attribute 'crs'":
+                "unary_union returns a bare Shapely geometry, which has no CRS. "
+                "Wrap it: gpd.GeoDataFrame(geometry=[...], crs=gdf.crs).",
+            "MemoryError":
+                "Too much data for memory. Work on a sample first: "
+                "gdf_sample = gdf.sample(n=10000, random_state=42).",
+        }
 
     def lookup(self, error_msg: str) -> str:
-        """在已知错误中查找匹配的修复建议"""
+        """Return the suggestion for the first pattern this error matches."""
         for pattern, fix in self._memory.items():
             if pattern.lower() in error_msg.lower():
                 return fix
         return ""
 
     def record(self, error_pattern: str, fix_suggestion: str):
-        """记录新的错误→修复映射"""
-        # 提取核心错误模式（去掉行号和路径）
+        """Remember a fix that worked, keyed on the error it addressed."""
         key = error_pattern.strip()
         if len(key) > 10:
             self._memory[key] = fix_suggestion

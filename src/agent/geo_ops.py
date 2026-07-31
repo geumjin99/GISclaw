@@ -32,7 +32,7 @@ Design notes:
 Registry entry: op_id -> {"category", "desc", "params", "build"}, where
 build(inputs, params, output, save_as) -> python code string.
 """
-from typing import Callable, Dict, Any
+from typing import Dict, Any
 
 
 def _pv(x) -> str:

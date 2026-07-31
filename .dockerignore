@@ -1,42 +1,21 @@
-# Keep the Docker build context small — only src/ and app/ are COPY'd anyway.
-# Everything below is research/data/artifacts the product image does not need.
+# Keep the build context small — only src/ and app/ are COPY'd into the image.
 .git
 __pycache__/
 *.pyc
 *.pyo
 
-# Large data / artifacts
-*.zip
-*.ppkx
-*.pdf
-*.tif
-*.docx
-*.xlsx
-models/
-results/
-results_archive/
-revision_gisrs/
-_codegen_workspace/
-_github_staging/
-_github_staging_v2/
-rag_db/
-rag_codegen_db/
-GISAnalystBench/
-GISAnalystBench_open/
-SpatialAnalysisAgent_Case_Studies/
-benchmarks/
-paper/
+# Documentation and sample data ship with the repository, not with the image.
 docs/
-skills/
-slope_analysis/
+examples/
 
-# The product's own runtime data (mounted at runtime, not baked in)
+# Runtime state: the workspace is mounted at run time, never baked in.
 projects/
+**/.gisclaw/
+**/runs/
+**/pred_results/
+*.log
 
-# The research UI (product uses app/web, not ui/)
-ui/
-
-# Local env
+# Local environment
 .env
 .venv/
 venv/

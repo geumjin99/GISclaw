@@ -14,12 +14,11 @@
 # <https://www.gnu.org/licenses/>, for more details.
 
 """
-GISclaw — product backend (single-agent ReAct, cloud LLMs).
+GISclaw — application backend (single ReAct agent, cloud LLMs).
 
-This is the *product* server, separate from the benchmark-oriented ui/server.py.
-It has no notion of benchmark tasks; instead it manages user "projects" (working
-folders) under a workspace root, runs the single ReAct agent live over a
-project's data, and streams Thought/Action/Observation to the browser via SSE.
+Manages user "projects" — working folders under a workspace root — runs the
+agent live over a project's data, and streams Thought/Action/Observation to the
+browser over SSE.
 
 Run (dev):   uvicorn app.server:app --host 0.0.0.0 --port 8765 --reload
 Run (docker): handled by Dockerfile / docker-compose.yml
@@ -47,7 +46,6 @@ import sys
 import threading
 import time
 from datetime import datetime
-from pathlib import Path
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -125,10 +123,10 @@ Args: <arguments as JSON object>
 8. Save ALL final outputs to pred_results/ before calling finish().
 9. After saving, verify: print(os.listdir('pred_results/'))
 
-## Available Packages
-geopandas, rasterio, shapely, fiona, pyproj, numpy, pandas, scipy, matplotlib,
-sklearn, libpysal, esda, mgwr, xarray, rasterstats, networkx, osmnx, seaborn,
-mapclassify, h3, momepy, pointpats, spaghetti, openpyxl, rtree, geoplot, cartopy
+## Available Packages (these are installed; nothing else is)
+geopandas, rasterio, shapely, fiona, pyproj, rtree, numpy, pandas, scipy,
+matplotlib, seaborn, sklearn, libpysal, esda, momepy, rasterstats, mapclassify,
+networkx, osmnx, h3, openpyxl
 {skills_block}{catalog_block}{data_block}{memory_block}{context_block}"""
 
 # Level 0 — bodies of `always: true` skills. Standing rules, injected every run.
@@ -218,71 +216,12 @@ def _skill_tool(name: str = "", path: str = "") -> str:
             f"{listing}{more}")
 
 
-def _install_skill_tool():
-    """Give every GISToolkit a `skill` tool — product process only.
+def _skill_tools() -> dict:
+    """The `skill` tool, offered to the agent only when there is one to open."""
+    if not SKILLS.build_catalog(STORE.skill_overrides()):
+        return {}
+    return {"skill": (_skill_tool, SKILL_TOOL_DESC)}
 
-    The agent builds its own toolkit inside `react_agent.run()`, so the only way
-    to add a tool without editing research code is to patch the class here. This
-    process never runs the paper experiments, so `tools.py` keeps its 6-tool
-    surface everywhere that matters for reproduction. Same trick the product
-    already uses for `build_system_prompt`.
-    """
-    from src.agent.tools import GISToolkit
-    if getattr(GISToolkit, "_gisclaw_skill_patched", False):
-        return
-    orig_init = GISToolkit.__init__
-
-    def patched_init(self, *a, **kw):
-        orig_init(self, *a, **kw)
-        if SKILLS.build_catalog(STORE.skill_overrides()):
-            self.tools["skill"] = _skill_tool
-            self.tool_descriptions = self.tool_descriptions + SKILL_TOOL_DESC
-        _make_finish_tolerant(self)
-
-    GISToolkit.__init__ = patched_init
-    GISToolkit._gisclaw_skill_patched = True
-
-
-def _salvage_summary(extra: dict) -> str:
-    """Recover a summary from mis-parsed finish arguments.
-
-    Long markdown summaries come back as `Args: {"summary": "…"}` with embedded
-    newlines; when that fails to parse, the whole JSON string arrives as a single
-    kwarg *name*. The run then ends with an argument error and the agent's final
-    write-up — often the only place a caveat like "170 blocks were imputed" is
-    stated — is lost. Salvage it instead of discarding it.
-    """
-    for key, value in extra.items():
-        for candidate in (key, value):
-            if not isinstance(candidate, str):
-                continue
-            try:
-                parsed = json.loads(candidate)
-            except (json.JSONDecodeError, TypeError):
-                continue
-            if isinstance(parsed, dict) and parsed.get("summary"):
-                return str(parsed["summary"])
-        if isinstance(key, str) and len(key) > 20:
-            return key          # last resort: the raw text is better than nothing
-    return ""
-
-
-def _make_finish_tolerant(toolkit):
-    orig_finish = toolkit.tools.get("finish")
-    if orig_finish is None:
-        return
-
-    def finish(summary: str = "", **extra):
-        if not summary and extra:
-            summary = _salvage_summary(extra)
-            if summary:
-                log.warning("finish args failed to parse; summary salvaged")
-        return orig_finish(summary=summary)
-
-    toolkit.tools["finish"] = finish
-
-
-_install_skill_tool()
 
 # Injected only when non-empty, so a first run in a fresh install pays no tokens.
 MEMORY_BLOCK = """
@@ -454,9 +393,7 @@ class ApiCallFailed(RuntimeError):
 # run cannot proceed, so turn it into an exception the caller can report.
 _ENGINE_ERROR_PREFIXES = (
     "Error during Claude API call:", "Error during API call:",
-    "Error during Ollama call:", "Error during generation:",
-    "Error: API client not initialized", "Error: Ollama client not initialized",
-    "Error: Model not loaded",
+    "Error: API client not initialized",
 )
 
 
@@ -531,17 +468,6 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
 
         from src.agent.error_memory import ErrorMemory
         from src.agent.react_agent import GISReActAgent
-        from src.agent.sandbox import PythonSandbox
-        from src.agent.tools import GISToolkit
-        import src.agent.prompts as prompts_module
-
-        agent = GISReActAgent(llm_engine=llm, timeout=cfg["timeout"],
-                              max_rounds=cfg["max_rounds"], verbose=True,
-                              rag=None, error_memory=ErrorMemory())
-
-        # Inject product system prompt (build_system_prompt override, same trick as ui/server.py)
-        _sandbox = PythonSandbox(work_dir=run_dir, timeout=cfg["timeout"])
-        _toolkit = GISToolkit(_sandbox, data_dir="dataset")
 
         # Continuity layer: standing user preferences + what this project already did.
         memory_text = STORE.memory_for_prompt() if STORE.memory_enabled() else ""
@@ -577,21 +503,28 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
         catalog_text = SKILLS.build_catalog(overrides, exclude=matched["name"] if matched else "")
         catalog_block = SKILL_CATALOG_BLOCK.format(catalog=catalog_text) if catalog_text else ""
 
-        prompt_text = SYSTEM_PROMPT.format(
-            tool_descriptions=_toolkit.tool_descriptions,
-            skill_rule=SKILL_RULE if catalog_text else "",
-            skills_block=skills_block,
-            catalog_block=catalog_block,
-            memory_block=memory_block,
-            context_block=context_block,
-            data_block=data_block,
-        )
+        # The tool descriptions are only known once the agent has built its
+        # toolkit, so hand it a builder rather than a finished prompt.
+        def build_prompt(tool_descriptions: str) -> str:
+            return SYSTEM_PROMPT.format(
+                tool_descriptions=tool_descriptions,
+                skill_rule=SKILL_RULE if catalog_text else "",
+                skills_block=skills_block,
+                catalog_block=catalog_block,
+                memory_block=memory_block,
+                context_block=context_block,
+                data_block=data_block,
+            )
+
         recorder.log(f"prompt: always_skills={len(skills_text)}c catalog={len(catalog_text)}c "
                      f"memory={len(memory_text)}c context={len(context_text)}c "
                      f"data={len(data_text)}c")
-        del _sandbox, _toolkit
-        _orig_bsp = prompts_module.build_system_prompt
-        prompts_module.build_system_prompt = lambda **kw: prompt_text
+
+        agent = GISReActAgent(llm_engine=llm, timeout=cfg["timeout"],
+                              max_rounds=cfg["max_rounds"], verbose=True,
+                              error_memory=ErrorMemory(),
+                              system_prompt_builder=build_prompt,
+                              extra_tools=_skill_tools())
 
         # Track which output files we've already announced
         seen_outputs = set()
@@ -632,19 +565,11 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
 
         msg_queue.put({"type": "status", "content": "Agent running...", "run_id": run_id})
         t0 = time.time()
-        result = agent.run(
-            task_id=0, instruction=instruction, workflow="",
-            data_dir=data_dir, work_dir=run_dir,
-            domain_knowledge="", dataset_description="", rag_context="", skill_text="",
-            on_step=on_step,
-        )
+        result = agent.run(instruction=instruction, data_dir=data_dir,
+                           work_dir=run_dir, on_step=on_step)
         elapsed = time.time() - t0
-        prompts_module.build_system_prompt = _orig_bsp
 
-        # Persist generated code as code.py, copy outputs to project/outputs/
-        code_src = os.path.join(run_dir, "_react_t0.py")
-        if os.path.exists(code_src):
-            shutil.copy2(code_src, os.path.join(run_dir, "code.py"))
+        # Copy this run's outputs into the project's own outputs/.
         out_root = os.path.join(pdir, "outputs")
         os.makedirs(out_root, exist_ok=True)
         output_files = []
@@ -845,7 +770,7 @@ async def api_test_provider(provider_id: str, request: Request):
         cfg = {
             "engine": PROVIDERS[provider_id]["engine"],
             "model_name": model_name,
-            # Thinking models burn the budget before emitting text — see CLAUDE.md.
+            # A thinking model can spend its whole budget before any text.
             "max_tokens": 512,
             "api_key": STORE.provider_key(provider_id),
             "base_url": STORE.provider_base_url(provider_id),

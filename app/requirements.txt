@@ -12,10 +12,8 @@ sse-starlette>=1.8
 openai>=1.30
 anthropic>=0.34
 
-# --- Core config / templating (used across src/agent) ---
+# --- Skill bundle frontmatter ---
 pyyaml>=6.0
-jinja2>=3.1
-rich>=13.0
 
 # --- Analysis stack the sandbox exposes to generated code ---
 # (geopandas, rasterio, shapely, pyproj, fiona come from conda in the image)

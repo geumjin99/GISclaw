@@ -11,5 +11,3 @@
 # warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Affero General Public License in the LICENSE file, or
 # <https://www.gnu.org/licenses/>, for more details.
-
-# OfflineGIS-Agent: 基于小型语言模型的离线通用 GIS Agent

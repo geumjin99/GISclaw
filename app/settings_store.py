@@ -38,8 +38,8 @@ SETTINGS_VERSION = 1
 # ---------------------------------------------------------------- providers --
 # A "provider" is an API endpoint + credential. Several models can share one.
 # `engine` picks the class in src/agent/llm_engine.py; every OpenAI-compatible
-# vendor (DeepSeek, Gemini's compat layer, Together, vLLM, Ollama…) reuses
-# OpenAIEngine with a different base_url — the same trick the research scripts use.
+# vendor (DeepSeek, Gemini's compatibility layer, vLLM, Ollama…) reuses
+# OpenAIEngine with a different base_url.
 PROVIDERS = {
     "openai": {
         "display": "OpenAI",
