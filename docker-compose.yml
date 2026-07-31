@@ -7,11 +7,18 @@
 # No .env is needed: keys go in through the interface. Copy .env.example to
 # .env only if you would rather supply them from the environment.
 #
-# The host ./projects folder is mounted as /workspace inside the container, so
-# the in-app file browser sees exactly what you put there, and every project you
-# create — its data/, outputs/, runs/, JOURNAL.md, LOG.md — lives on the host.
-# Nothing is lost when the container stops, and API keys you set in the UI are
-# stored under ./projects/.gisclaw/ (mode 600), never inside the image.
+# Your work lives on the host, not in the container: the folder below is mounted
+# as /workspace, so every project — its data/, outputs/, runs/, JOURNAL.md,
+# LOG.md — and the API keys you set in the interface (under .gisclaw/, mode 600)
+# are ordinary files on your own disk. Nothing is lost when the container stops.
+#
+# It defaults to ./projects, inside this folder, which is convenient but means a
+# new release unpacked over the top would take your work with it. To keep the
+# two apart, put a line like this in .env and move your existing projects there:
+#
+#     GISCLAW_DATA=/home/you/GISclaw-data
+#
+# Then this source folder is disposable and updating is just a rebuild.
 services:
   gisclaw:
     build: .
@@ -25,7 +32,7 @@ services:
       - path: .env
         required: false
     volumes:
-      - ./projects:/workspace
+      - ${GISCLAW_DATA:-./projects}:/workspace
     restart: unless-stopped
 
 # ---------------------------------------------------------------------------

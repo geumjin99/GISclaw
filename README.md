@@ -86,6 +86,12 @@ they never enter the image, the browser, or this repository.
 
 Then create a project, attach your data, and type what you want.
 
+Your work — projects, outputs, run history, and the keys you entered — is kept
+in `projects/` beside the compose file, as ordinary files on your disk. That is
+also the folder a new release replaces, so if you expect to update later, set
+`GISCLAW_DATA` in `.env` to a path outside the source tree first and it stays
+out of harm's way. See [`.env.example`](.env.example).
+
 <div align="center">
   <img src="docs/screenshots/02-map-vectors.png" width="100%" alt="Project data displayed on the map">
   <p><sub>Your layers on the map, with the project tree on the left and the conversation on the right.
@@ -376,6 +382,11 @@ Google,或任何 OpenAI 兼容端点),点 **Test**。Key 保存在服务端 `./p
 
 随后新建项目、挂上数据,直接把需求打出来。
 
+你的成果 —— 项目、产物、运行记录,以及你填入的 key —— 都以普通文件存放在 compose 文件旁边的
+`projects/` 里。而这个目录正是新版本发布时会被替换掉的那个,所以如果你打算以后更新,
+建议先在 `.env` 里把 `GISCLAW_DATA` 指到源码目录之外,数据就不会被波及。见
+[`.env.example`](.env.example)。
+
 <div align="center">
   <img src="docs/screenshots/02-map-vectors.png" width="100%" alt="项目数据在地图上">
   <p><sub>图层在地图上,左侧是项目树,右侧是对话。右键任意图层可改符号化、看属性表、缩放。</sub></p>
@@ -624,6 +635,11 @@ OpenAI 호환 엔드포인트)의 키를 붙여넣고 **Test** 를 누릅니다.
 포함되지 않습니다.
 
 이후 프로젝트를 만들고 데이터를 첨부한 뒤, 필요한 작업을 문장으로 입력하면 됩니다.
+
+작업물 --- 프로젝트, 산출물, 실행 기록, 입력한 키 --- 은 compose 파일 옆 `projects/` 에
+일반 파일로 보관됩니다. 이 폴더는 새 릴리스가 교체하는 폴더이기도 하므로, 나중에
+업데이트할 생각이라면 `.env` 에서 `GISCLAW_DATA` 를 소스 트리 바깥 경로로 먼저 지정해
+두십시오. [`.env.example`](.env.example) 참조.
 
 <div align="center">
   <img src="docs/screenshots/02-map-vectors.png" width="100%" alt="지도에 표시된 프로젝트 데이터">
