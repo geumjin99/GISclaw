@@ -265,6 +265,8 @@ button { font:inherit; color:inherit; }
 .primary-btn, .secondary-btn { display:inline-flex; align-items:center; gap:6px; padding:8px 18px; font-size:13px; font-weight:600; border:none; border-radius:6px; cursor:pointer; transition:background .15s, transform .1s; }
 .primary-btn { background:var(--ink); color:var(--panel); box-shadow:var(--shadow-sm); }
 .primary-btn:hover { background:#0F1724; }
+.primary-btn.danger-btn { background:var(--danger); }
+.primary-btn.danger-btn:hover { filter:brightness(0.92); }
 .primary-btn:active { transform:translateY(1px); }
 .primary-btn svg { width:13px; height:13px; }
 .secondary-btn { background:var(--bg); color:var(--danger); border:1px solid var(--line); }

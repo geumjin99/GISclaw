@@ -21,7 +21,7 @@
   <title>GISclaw — GIS Analyst Agent</title>
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js"></script>
-  <link rel="stylesheet" href="style.css?v=25" />
+  <link rel="stylesheet" href="style.css?v=26" />
 </head>
 <body>
   <div class="app">
@@ -307,6 +307,22 @@
     </div>
   </div>
 
+  <!-- Confirm modal — for the actions that cannot be undone -->
+  <div class="modal-overlay hidden" id="confirmModal">
+    <div class="modal modal-sm">
+      <div class="modal-head">
+        <span class="modal-title" id="confirmTitle">Are you sure?</span>
+        <button class="modal-close" id="confirmClose">✕</button>
+      </div>
+      <div class="modal-sub" id="confirmBody"></div>
+      <div class="modal-foot">
+        <span class="ca-spacer"></span>
+        <button class="reset-btn" id="confirmCancel"><span>Cancel</span></button>
+        <button class="primary-btn danger-btn" id="confirmOk"><span>Delete</span></button>
+      </div>
+    </div>
+  </div>
+
   <!-- New project modal -->
   <div class="modal-overlay hidden" id="newModal">
     <div class="modal modal-sm">
@@ -493,6 +509,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=25"></script>
+  <script src="app.js?v=26"></script>
 </body>
 </html>

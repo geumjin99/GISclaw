@@ -1503,6 +1503,93 @@ async def api_archive_project(pid: str):
     return {"ok": True, "id": pid, "projects": _list_projects()}
 
 
+@app.delete("/api/projects/{pid}")
+async def api_delete_project(pid: str, confirm: str = ""):
+    """Delete a project and everything in it, for good.
+
+    Archiving is the reversible option and stays the default in the interface;
+    this is for the projects you never want to see again. `confirm` has to be
+    the project's own id, so a stray request cannot erase anything.
+    """
+    pdir = _project_dir(pid)
+    if not os.path.isdir(pdir):
+        return JSONResponse({"error": "project not found"}, status_code=404)
+    if confirm != pid:
+        return JSONResponse({"error": "confirmation does not match this project"},
+                            status_code=400)
+    counts = {
+        "data": len(_dir_tree(os.path.join(pdir, "data"))),
+        "outputs": len(_dir_tree(os.path.join(pdir, "outputs"))),
+        "runs": len(os.listdir(os.path.join(pdir, "runs")))
+        if os.path.isdir(os.path.join(pdir, "runs")) else 0,
+    }
+    try:
+        shutil.rmtree(pdir)
+    except OSError as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    log.info(f"deleted project {pid} ({counts})")
+    return {"ok": True, "id": pid, "deleted": counts, "projects": _list_projects()}
+
+
+@app.delete("/api/archived/{pid}")
+async def api_delete_archived(pid: str, confirm: str = ""):
+    """Same, for a project already sitting in _archived/."""
+    try:
+        src = _safe_join(_archive_root(), _slug(pid))
+    except ValueError:
+        return JSONResponse({"error": "invalid id"}, status_code=400)
+    if not os.path.isdir(src):
+        return JSONResponse({"error": "not archived"}, status_code=404)
+    if confirm != pid:
+        return JSONResponse({"error": "confirmation does not match this project"},
+                            status_code=400)
+    try:
+        shutil.rmtree(src)
+    except OSError as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    log.info(f"deleted archived project {pid}")
+    return {"ok": True, "id": pid}
+
+
+@app.delete("/api/projects/{pid}/file")
+async def api_delete_file(pid: str, where: str = "outputs", path: str = ""):
+    """Delete one file from a project's data/ or outputs/.
+
+    Only those two folders: the run history and the project's own records are
+    the audit trail and are not deletable from here. Deleting one member of a
+    shapefile takes its siblings with it, for the same reason attaching one
+    brings them along — the leftovers are unreadable on their own.
+    """
+    pdir = _project_dir(pid)
+    if not os.path.isdir(pdir):
+        return JSONResponse({"error": "project not found"}, status_code=404)
+    if where not in ("data", "outputs"):
+        return JSONResponse({"error": "only data/ and outputs/ files can be deleted"},
+                            status_code=400)
+    if not path:
+        return JSONResponse({"error": "path required"}, status_code=400)
+    try:
+        target = _safe_join(os.path.join(pdir, where), path)
+    except ValueError:
+        return JSONResponse({"error": "invalid path"}, status_code=400)
+    if not os.path.isfile(target):
+        return JSONResponse({"error": "file not found"}, status_code=404)
+
+    removed = []
+    for f in _companion_files(target):
+        try:
+            os.remove(f)
+            removed.append(os.path.relpath(f, os.path.join(pdir, where)))
+        except OSError as e:
+            log.error(f"delete {f} failed: {e}")
+    if where == "data":
+        data_profile.invalidate(pdir)   # the cached schema described a file that is gone
+    log.info(f"[{pid}] deleted from {where}: {removed}")
+    return {"ok": True, "removed": removed,
+            "data": _dir_tree(os.path.join(pdir, "data")),
+            "outputs": _dir_tree(os.path.join(pdir, "outputs"))}
+
+
 @app.get("/api/archived")
 async def api_list_archived():
     """Projects sitting in _archived/, ready to be brought back."""

@@ -455,6 +455,10 @@
           if (!isActive) await selectProject(pj.id);
           openJournal();
         } },
+      { sep: true },
+      { label: 'Delete project…', icon: 'trash', danger: true,
+        disabled: state.running && isActive,
+        action: () => deleteProject(pj) },
     ]);
   }
 
@@ -474,6 +478,17 @@
     const it = document.createElement('div');
     it.className = 'tree-item';
     it.innerHTML = `${ICONS[iconFor(fn)]}<span class="tree-label">${esc(fn)}</span><span class="tree-meta">${extOf(fn)}</span>`;
+    it.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      showContextMenu(e.clientX, e.clientY, [
+        { label: 'Open', icon: 'layers', action: () => it.click() },
+        { sep: true },
+        { label: 'Delete file…', icon: 'trash', danger: true,
+          disabled: state.running,
+          action: () => deleteFile(fn, where) },
+      ]);
+    });
     it.addEventListener('click', e => {
       e.stopPropagation();
       $$('#catalog .tree-item').forEach(x => x.classList.remove('active'));
@@ -795,6 +810,7 @@
   $('#dataRaw').addEventListener('click', () => { dataDoc.raw = !dataDoc.raw; renderDataView(); });
 
   function openImageView(filename, src) {
+    state.imageName = filename;     // so a delete can clear the view it is showing
     const img = $('#imageEl');
     img.src = src + (src.includes('?') ? '&' : '?') + 't=' + Date.now();
     $('#imageFilename').textContent = filename;
@@ -803,6 +819,7 @@
     switchTab('image');
   }
   function resetImageView() {
+    state.imageName = null;
     $('#imageTab').setAttribute('hidden', '');
     $('#imageEl').removeAttribute('src');
     $('#imageFilename').textContent = '—';
@@ -1164,6 +1181,70 @@
   // ---- archive / restore -------------------------------------------------
   // Archiving is a move, not a delete: the folder goes under _archived/ so it
   // leaves the list and the agent's reach with every file intact.
+  // ---- confirm dialog, for the things that cannot be undone ----
+  const confirmModal = $('#confirmModal');
+  let confirmResolve = null;
+  function closeConfirm(answer) {
+    confirmModal.classList.add('hidden');
+    if (confirmResolve) { confirmResolve(answer); confirmResolve = null; }
+  }
+  $('#confirmCancel').addEventListener('click', () => closeConfirm(false));
+  $('#confirmClose').addEventListener('click', () => closeConfirm(false));
+  $('#confirmOk').addEventListener('click', () => closeConfirm(true));
+  function askConfirm({ title, html, okLabel = 'Delete' }) {
+    $('#confirmTitle').textContent = title;
+    $('#confirmBody').innerHTML = html;
+    $('#confirmOk').querySelector('span').textContent = okLabel;
+    confirmModal.classList.remove('hidden');
+    return new Promise(res => { confirmResolve = res; });
+  }
+
+  async function deleteFile(fn, where) {
+    const ok = await askConfirm({
+      title: 'Delete file',
+      html: `<b>${esc(fn)}</b> will be deleted from <code>${esc(where)}/</code>.<br/>`
+          + `This cannot be undone. Earlier runs keep their own copies under <code>runs/</code>.`
+          + (extOf(fn) === 'shp'
+             ? `<br/><br/>Its <code>.shx</code>/<code>.dbf</code>/<code>.prj</code> siblings go with it — a lone <code>.shp</code> is unreadable.`
+             : ''),
+    });
+    if (!ok) return;
+    const res = await jsend(
+      `/api/projects/${state.project.id}/file?where=${where}&path=${encodeURIComponent(fn)}`,
+      undefined, 'DELETE');
+    if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
+    // Drop it from the map and the viewer if it happened to be open.
+    if (shownLayers[fn]) { map.removeLayer(shownLayers[fn].layer); delete shownLayers[fn]; renderLegend(); }
+    if (state.imageName === fn) resetImageView();
+    addMsg({ kind: 'system', text: `Deleted ${res.removed.join(', ')} from ${where}/.` });
+    await refreshTree();
+  }
+
+  async function deleteProject(pj) {
+    const t = (state.project && state.project.id === pj.id && state.tree) || null;
+    const counts = t
+      ? `${t.data.length} data file(s), ${t.outputs.length} output(s), ${(t.runs || []).length} run(s)`
+      : `${pj.data_count || 0} data file(s) and its whole run history`;
+    const ok = await askConfirm({
+      title: 'Delete project',
+      html: `<b>${esc(pj.name)}</b> and everything in it — ${counts} — will be deleted `
+          + `from disk. This cannot be undone.<br/><br/>`
+          + `Prefer <b>Archive</b> if you might want it back, or <b>Export as zip</b> first.`,
+      okLabel: 'Delete project',
+    });
+    if (!ok) return;
+    const res = await jsend(`/api/projects/${pj.id}?confirm=${encodeURIComponent(pj.id)}`,
+                            undefined, 'DELETE');
+    if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
+    if (state.project && state.project.id === pj.id) {
+      state.project = null; state.tree = null;
+      clearMap(); resetCode(); resetImageView();
+      $('#btnAddData').disabled = true; $('#btnToolbox').disabled = true; $('#startBtn').disabled = true;
+    }
+    addMsg({ kind: 'system', text: `Deleted project "${pj.name}".` });
+    await loadProjects();
+  }
+
   async function archiveProject(pj) {
     const res = await jpost(`/api/projects/${pj.id}/archive`, {});
     if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
@@ -1207,6 +1288,24 @@
         openArchived();
       });
       row.appendChild(btn);
+      const del = document.createElement('button');
+      del.className = 'mini-btn danger'; del.textContent = 'Delete';
+      del.addEventListener('click', async e => {
+        e.stopPropagation();
+        const ok = await askConfirm({
+          title: 'Delete archived project',
+          html: `<b>${esc(r.name)}</b> — ${r.data_count} file(s), ${r.run_count} run(s) — `
+              + `will be deleted from disk. This cannot be undone.`,
+          okLabel: 'Delete project',
+        });
+        if (!ok) { openArchived(); return; }
+        const res = await jsend(`/api/archived/${r.id}?confirm=${encodeURIComponent(r.id)}`,
+                                undefined, 'DELETE');
+        if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
+        addMsg({ kind: 'system', text: `Deleted archived project "${r.name}".` });
+        openArchived();
+      });
+      row.appendChild(del);
       list.appendChild(row);
     });
   }
