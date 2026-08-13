@@ -52,17 +52,23 @@ later. As stated in sections 15 and 16 of that licence, the program comes with
 for any damages arising from its use. Nothing here or elsewhere in this
 repository grants a warranty or creates a support obligation.
 
-## Your data leaves your machine
+## Your data leaves your machine — unless the model is on it
 
-The analysis runs locally, but the reasoning does not. To decide what to do
-next, GISclaw sends the model provider you configure a description of your
-data — file names, column names, coordinate reference systems, extents, summary
-statistics, error messages, and sample values that appear in program output.
+The analysis runs locally, but with a hosted model the reasoning does not. To
+decide what to do next, GISclaw sends the model provider you configure a
+description of your data — file names, column names, coordinate reference
+systems, extents, summary statistics, error messages, and sample values that
+appear in program output.
 
 If your data is confidential, restricted, or personal, satisfy yourself that
 sending this material to that provider is permitted before you begin. The
 provider's own terms and retention policy govern what happens to it. GISclaw
 does not transmit anything anywhere else.
+
+Selecting a model you serve yourself (the **Local model** provider — Ollama, LM
+Studio, vLLM) keeps the reasoning on your own hardware too, and nothing is sent
+to any provider. Small local models are noticeably weaker at planning a
+multi-step analysis than the hosted flagships, so read their work closely.
 
 ## Costs are yours
 

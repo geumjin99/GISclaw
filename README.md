@@ -84,6 +84,13 @@ Open **Settings → API keys…**, paste a key for whichever provider you use
 **Test**. Keys are held server-side under `./projects/.gisclaw/` with mode `600`;
 they never enter the image, the browser, or this repository.
 
+Prefer to keep everything on your own hardware? Serve a model yourself — say
+`ollama pull qwen2.5-coder:14b` — then open the **Local model** entry on that
+same panel, leave the key blank and press **Test**: it asks your machine what it
+is serving and adds those models to the run selector. Nothing is sent to a
+provider and nothing is billed. Small local models plan a multi-step analysis
+less reliably than the hosted flagships, so read their work closely.
+
 Then create a project, attach your data, and type what you want.
 
 Your work — projects, outputs, run history, and the keys you entered — is kept
@@ -305,7 +312,8 @@ review rather than a finding, especially where a wrong answer causes harm. The
 author accepts no responsibility for results the model produces or for decisions
 based on them, and the software comes with no warranty. Note also that the
 reasoning runs on the model provider you configure, so a description of your
-data leaves your machine.
+data leaves your machine — unless you pick a model served on your own hardware,
+in which case nothing is sent anywhere.
 
 The full text is in [`DISCLAIMER.md`](DISCLAIMER.md) — worth reading once.
 
@@ -379,6 +387,11 @@ docker compose up -d
 进入 **Settings → API keys…**,粘贴你所用服务商的 key(OpenAI、Anthropic、DeepSeek、
 Google,或任何 OpenAI 兼容端点),点 **Test**。Key 保存在服务端 `./projects/.gisclaw/`
 (权限 600),不进镜像、不进浏览器、不进本仓库。
+
+想让一切都留在自己机器上?先在本机起一个模型(例如 `ollama pull qwen2.5-coder:14b`),
+然后在同一面板打开 **Local model** 一项,key 留空,点 **Test** —— 它会去问你的机器现在
+在服哪些模型,并把它们加进运行下拉。不向任何服务商发送数据,也不产生费用。本地小模型在
+多步分析的路径规划上明显不如云端旗舰,产出请仔细核对。
 
 随后新建项目、挂上数据,直接把需求打出来。
 
@@ -564,7 +577,8 @@ GISclaw 的分析路径和代码都是它自己规划、自己写的,而这个�
 每次运行都会把实际执行的代码、完整轨迹和产物留在磁盘上,就是为了让你能核对。请核对。
 把产出当作**供专业人员复核的草稿**,而不是结论,在错误答案会造成危害的场合尤其如此。
 作者对模型产生的结果、以及据此做出的决定不承担任何责任,本软件不提供任何担保。另外请注意:
-推理发生在你配置的模型服务商那里,因此**对你数据的描述会离开本机**。
+推理发生在你配置的模型服务商那里,因此**对你数据的描述会离开本机** —— 除非你选用
+本机自己起的模型,那样不向任何地方发送数据。
 
 完整条款见 [`DISCLAIMER.md`](DISCLAIMER.md),建议读一遍。
 
@@ -633,6 +647,13 @@ docker compose up -d
 OpenAI 호환 엔드포인트)의 키를 붙여넣고 **Test** 를 누릅니다. 키는 서버 측
 `./projects/.gisclaw/` 에 권한 600으로 보관되며, 이미지·브라우저·이 저장소 어디에도
 포함되지 않습니다.
+
+전부 자기 장비 안에서 처리하고 싶다면, 모델을 직접 서빙한 뒤(예: `ollama pull
+qwen2.5-coder:14b`) 같은 패널의 **Local model** 항목을 열고 키는 비워 둔 채 **Test** 를
+누르십시오. 지금 어떤 모델을 서빙 중인지 물어보고 실행 선택기에 추가합니다. 어떤
+제공자에게도 데이터를 보내지 않으며 비용도 발생하지 않습니다. 다만 작은 로컬 모델은
+다단계 분석의 경로를 세우는 능력이 클라우드 최상위 모델보다 확실히 약하므로, 결과를
+꼼꼼히 확인하십시오.
 
 이후 프로젝트를 만들고 데이터를 첨부한 뒤, 필요한 작업을 문장으로 입력하면 됩니다.
 
@@ -834,6 +855,7 @@ GISclaw는 분석 경로와 코드를 스스로 계획하고 작성하며, 그 �
 이어지는 상황에서는 특히 그렇습니다. 저작자는 모델이 만들어 낸 결과와 그에 근거한 결정에
 대해 어떠한 책임도 지지 않으며, 본 소프트웨어는 어떠한 보증도 제공하지 않습니다. 또한
 추론은 사용자가 설정한 제공자에서 수행되므로 **데이터에 대한 설명이 기기를 벗어납니다.**
+직접 서빙하는 로컬 모델을 선택하면 아무것도 외부로 전송되지 않습니다.
 
 전문은 [`DISCLAIMER.md`](DISCLAIMER.md) 에 있습니다. 한 번 읽어 두시기를 권합니다.
 

@@ -58,7 +58,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app import data_profile, journal, reflect
 from app.logging_setup import RunRecorder, get_app_logger
-from app.settings_store import PROVIDERS, SettingsStore, mask_key
+from app.settings_store import PROVIDERS, SettingsStore, mask_key, in_container
 from app.skills_store import SkillsStore
 
 # ============================================================
@@ -356,6 +356,10 @@ def init_llm(cfg: dict):
     """Build an engine from a resolved model config (engine/api_key/base_url)."""
     engine = cfg["engine"]
     key = cfg.get("api_key", "")
+    if not key and cfg.get("key_optional"):
+        # A model served from your own machine authenticates nobody, but the
+        # OpenAI client refuses to start without *something* in the field.
+        key = "local"
     if not key:
         raise RuntimeError(
             f"No API key configured for provider '{cfg.get('provider', '?')}'. "
@@ -798,6 +802,16 @@ async def api_test_provider(provider_id: str, request: Request):
             if m.get("provider") == provider_id and m.get("enabled", True):
                 model_name = m.get("model_name", "")
                 break
+    if not model_name and STORE.provider_key_optional(provider_id):
+        # A local server is normally tested before any model has been added —
+        # the point of the test is to learn whether it is up at all. Ask it what
+        # it is serving and use the first answer.
+        found = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: _discover_models(provider_id))
+        if not found.get("ok"):
+            return {"ok": False, "model_name": "", "error": found.get("error", "")}
+        if found.get("models"):
+            model_name = found["models"][0]["id"]
     if not model_name:
         return JSONResponse({"error": "no model to test with — add one first"}, status_code=400)
 
@@ -808,6 +822,7 @@ async def api_test_provider(provider_id: str, request: Request):
             # A thinking model can spend its whole budget before any text.
             "max_tokens": 512,
             "api_key": STORE.provider_key(provider_id),
+            "key_optional": STORE.provider_key_optional(provider_id),
             "base_url": STORE.provider_base_url(provider_id),
             "provider": provider_id,
             "cost_per_m": (0.0, 0.0),
@@ -869,6 +884,33 @@ async def api_delete_model(mid: str):
     return {"ok": ok, "models": STORE.models_public()}
 
 
+def _endpoint_error(provider_id: str, base: str, exc: Exception) -> str:
+    """Turn a connection failure into something the user can act on.
+
+    "Connection error." is all the SDK says when nothing is listening, which is
+    exactly the case a local server hits — and inside a container the reason is
+    usually that the address is right but reaches the wrong machine.
+    """
+    msg = str(exc)[:300]
+    if not STORE.provider_key_optional(provider_id):
+        return msg
+    low = msg.lower()
+    if not any(s in low for s in ("connect", "refus", "timed out", "timeout",
+                                  "unreachable", "name or service")):
+        return msg
+    extra = f" Tried {base}." if base else ""
+    if in_container():
+        extra += (" Running in Docker, so localhost is the container: the address"
+                  " is rewritten to reach your machine, which needs"
+                  " `extra_hosts: [\"host.docker.internal:host-gateway\"]` in"
+                  " docker-compose.yml (it is there by default). Also make sure"
+                  " the server listens on all interfaces —"
+                  " `OLLAMA_HOST=0.0.0.0 ollama serve`.")
+    else:
+        extra += " Is the server running? For Ollama: `ollama serve`."
+    return msg + extra
+
+
 def _discover_models(provider_id: str) -> dict:
     """Ask the provider what it is actually serving right now.
 
@@ -876,9 +918,11 @@ def _discover_models(provider_id: str) -> dict:
     models.list(). Both SDKs are already dependencies, so no raw HTTP here.
     """
     key = STORE.provider_key(provider_id)
-    if not key:
+    optional = STORE.provider_key_optional(provider_id)
+    if not key and not optional:
         return {"ok": False, "error": "No API key for this provider yet."}
     meta = PROVIDERS.get(provider_id, {})
+    base = STORE.provider_base_url(provider_id)
     try:
         if meta.get("engine") == "claude":
             import anthropic
@@ -886,11 +930,15 @@ def _discover_models(provider_id: str) -> dict:
             ids = [m.id for m in client.models.list(limit=100).data]
         else:
             from openai import OpenAI
-            base = STORE.provider_base_url(provider_id)
-            client = OpenAI(api_key=key, **({"base_url": base} if base else {}))
+            # A server that is not running should say so in seconds; the
+            # client's default is a ten-minute wait with retries on top.
+            local = STORE.provider_key_optional(provider_id)
+            client = OpenAI(api_key=key or "local",
+                            **({"base_url": base} if base else {}),
+                            **({"timeout": 8.0, "max_retries": 0} if local else {}))
             ids = [m.id for m in client.models.list().data]
     except Exception as e:
-        return {"ok": False, "error": str(e)[:300]}
+        return {"ok": False, "error": _endpoint_error(provider_id, base, e)}
 
     # Chat models only — these endpoints also serve embeddings, audio, images.
     skip = ("embed", "whisper", "tts", "dall-e", "moderation", "image",
@@ -1862,7 +1910,7 @@ async def api_run(request: Request):
     cfg = STORE.model_config(model_key)
     if not cfg:
         return JSONResponse({"error": f"Unknown model: {model_key}"}, status_code=400)
-    if not cfg.get("api_key"):
+    if not cfg.get("api_key") and not cfg.get("key_optional"):
         return JSONResponse(
             {"error": f"No API key for '{cfg.get('provider')}'. Open Settings → API keys."},
             status_code=400)

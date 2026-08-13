@@ -73,6 +73,23 @@ PROVIDERS = {
         "key_hint": "AIza…",
         "docs": "https://aistudio.google.com/apikey",
     },
+    "local": {
+        "display": "Local model (Ollama / LM Studio / vLLM)",
+        "engine": "openai",
+        "env": "GISCLAW_LOCAL_API_KEY",
+        # Ollama's OpenAI-compatible port. LM Studio is :1234/v1, vLLM :8000/v1.
+        "base_url": "http://localhost:11434/v1",
+        "key_hint": "usually none — leave blank",
+        "docs": "https://ollama.com/download",
+        "needs_base_url": True,
+        # A model on your own machine has nobody to bill: these servers accept
+        # any token, or none. Requiring a key here would block the one provider
+        # that does not have one.
+        "key_optional": True,
+        "hint": ("Serve a model first (e.g. `ollama pull qwen2.5-coder:14b`), then "
+                 "press Fetch below to list what it is serving. Nothing leaves your "
+                 "machine with these — see Help → About."),
+    },
     "custom": {
         "display": "Custom (OpenAI-compatible)",
         "engine": "openai",
@@ -83,6 +100,77 @@ PROVIDERS = {
         "needs_base_url": True,
     },
 }
+
+# A local server is reached at localhost from your desktop, but inside the
+# container localhost is the container itself, so the address the user typed
+# would connect to nothing. Docker publishes the host under this name; on Linux
+# it exists only if the compose file asks for it (`extra_hosts: host-gateway`),
+# so fall back to the default gateway address when the name does not resolve.
+_LOOPBACK = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+_host_alias_cache: list = []
+
+
+def in_container() -> bool:
+    return os.path.exists("/.dockerenv") or os.environ.get("GISCLAW_IN_DOCKER") == "1"
+
+
+def _host_alias() -> Optional[str]:
+    """Address of the machine running Docker, as seen from inside a container."""
+    if _host_alias_cache:
+        return _host_alias_cache[0]
+    import socket
+    alias = None
+    try:
+        socket.gethostbyname("host.docker.internal")
+        alias = "host.docker.internal"
+    except OSError:
+        try:  # default gateway = the host, on a standard bridge network
+            with open("/proc/net/route", encoding="utf-8") as f:
+                for line in f.read().splitlines()[1:]:
+                    parts = line.split()
+                    if len(parts) > 2 and parts[1] == "00000000":
+                        raw = int(parts[2], 16)
+                        alias = ".".join(str((raw >> s) & 0xFF) for s in (0, 8, 16, 24))
+                        break
+        except OSError:
+            alias = None
+    _host_alias_cache.append(alias)
+    return alias
+
+
+def _listening(host: str, port: int, timeout: float = 0.35) -> bool:
+    import socket
+    try:
+        with socket.create_connection((host, port), timeout):
+            return True
+    except OSError:
+        return False
+
+
+def reachable_base_url(url: Optional[str]) -> Optional[str]:
+    """Rewrite a loopback address so it still points at the user's own machine.
+
+    Only applies inside a container, and only when nothing answers at the
+    address as written — with `network_mode: host` localhost already is the
+    host, and rewriting there would send the request somewhere else entirely.
+    The stored value is never rewritten: the interface keeps showing what was
+    entered, because that is what is true on the user's own machine.
+    """
+    if not url or not in_container():
+        return url
+    from urllib.parse import urlsplit, urlunsplit
+    parts = urlsplit(url)
+    host = (parts.hostname or "").strip("[]")
+    if host.lower() not in _LOOPBACK:
+        return url
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    if _listening(host, port):
+        return url
+    alias = _host_alias()
+    if not alias:
+        return url
+    return urlunsplit((parts.scheme, f"{alias}:{port}", parts.path,
+                       parts.query, parts.fragment))
 
 # ------------------------------------------------------------ builtin models --
 # Curated defaults. The user can disable any of these and add their own; the
@@ -185,12 +273,17 @@ class SettingsStore:
         env = PROVIDERS.get(pid, {}).get("env", "")
         return (os.environ.get(env, "") or "").strip() if env else ""
 
-    def provider_base_url(self, pid: str) -> Optional[str]:
+    def provider_base_url(self, pid: str, raw: bool = False) -> Optional[str]:
+        """Endpoint for this provider. `raw=True` returns it exactly as stored."""
         stored = self.load()["providers"].get(pid, {})
         url = (stored.get("base_url") or "").strip()
-        if url:
-            return url
-        return PROVIDERS.get(pid, {}).get("base_url") or None
+        if not url:
+            url = PROVIDERS.get(pid, {}).get("base_url") or None
+        return url if raw else reachable_base_url(url)
+
+    def provider_key_optional(self, pid: str) -> bool:
+        """True for endpoints that have nobody to bill — a local server."""
+        return bool(PROVIDERS.get(pid, {}).get("key_optional"))
 
     def set_provider(self, pid: str, api_key: Optional[str] = None,
                      base_url: Optional[str] = None):
@@ -219,15 +312,21 @@ class SettingsStore:
             stored = data["providers"].get(pid, {})
             stored_key = (stored.get("api_key") or "").strip()
             env_key = (os.environ.get(meta.get("env", ""), "") or "").strip()
+            key_optional = bool(meta.get("key_optional"))
+            url = (stored.get("base_url") or meta.get("base_url") or "")
             out.append({
                 "id": pid,
                 "display": meta["display"],
                 "key_hint": meta.get("key_hint", ""),
                 "docs": meta.get("docs", ""),
+                "hint": meta.get("hint", ""),
                 "needs_base_url": bool(meta.get("needs_base_url")),
-                "base_url": (stored.get("base_url") or meta.get("base_url") or ""),
+                "key_optional": key_optional,
+                "base_url": url,
                 "masked_key": mask_key(stored_key or env_key),
-                "configured": bool(stored_key or env_key),
+                # "Configured" means usable: for a local server that is an
+                # endpoint, not a credential.
+                "configured": bool(stored_key or env_key or (key_optional and url)),
                 "from_env": bool(env_key and not stored_key),
                 "env_var": meta.get("env", ""),
             })
@@ -273,7 +372,9 @@ class SettingsStore:
         cfg["id"] = mid
         cfg["engine"] = meta["engine"]
         cfg["api_key"] = self.provider_key(provider)
-        cfg["base_url"] = m.get("base_url") or self.provider_base_url(provider)
+        cfg["key_optional"] = bool(meta.get("key_optional"))
+        cfg["base_url"] = reachable_base_url(
+            m.get("base_url") or self.provider_base_url(provider, raw=True))
         cost = cfg.get("cost_per_m") or (0.0, 0.0)
         cfg["cost_per_m"] = tuple(cost)
         return cfg
@@ -283,9 +384,12 @@ class SettingsStore:
         out = []
         for mid, m in self.models().items():
             provider = m.get("provider", "openai")
-            has_key = bool(self.provider_key(provider))
+            has_key = bool(self.provider_key(provider)) or self.provider_key_optional(provider)
             needs_url = bool(PROVIDERS.get(provider, {}).get("needs_base_url"))
-            has_url = bool(m.get("base_url") or self.provider_base_url(provider))
+            # `raw` here: this only asks whether an address is configured, and
+            # resolving one costs a connection probe inside a container.
+            has_url = bool(m.get("base_url") or self.provider_base_url(provider, raw=True))
+            ready = has_key and (has_url or not needs_url)
             out.append({
                 "id": mid,
                 "display": m.get("display", mid),
@@ -295,7 +399,9 @@ class SettingsStore:
                 "model_name": m.get("model_name", ""),
                 "custom": bool(m.get("custom")),
                 "enabled": bool(m.get("enabled", True)),
-                "ready": bool(has_key and (has_url or not needs_url)),
+                "ready": bool(ready),
+                # Why it cannot run, in the words the settings panel should use.
+                "blocked": "" if ready else ("no endpoint" if has_key else "no key"),
                 "base_url": m.get("base_url", "") or "",
                 "max_rounds": m.get("max_rounds", 50),
                 "max_tokens": m.get("max_tokens", 4096),

@@ -1543,25 +1543,30 @@
     settings.providers.forEach(p => {
       const card = document.createElement('div');
       card.className = 'prov';
-      const badge = p.configured
-        ? `<span class="prov-badge ${p.from_env ? 'env' : 'ok'}">${p.from_env ? 'from ' + esc(p.env_var) : 'key saved'}</span>`
-        : `<span class="prov-badge">no key</span>`;
+      // A model on your own machine bills nobody, so having no key is its
+      // normal state — calling that "no key" would read as something missing.
+      const badge = p.key_optional && !p.masked_key
+        ? `<span class="prov-badge ${p.configured ? 'ok' : ''}">no key needed</span>`
+        : p.configured
+          ? `<span class="prov-badge ${p.from_env ? 'env' : 'ok'}">${p.from_env ? 'from ' + esc(p.env_var) : 'key saved'}</span>`
+          : `<span class="prov-badge">no key</span>`;
       card.innerHTML =
         `<div class="prov-head">
            <span class="prov-name">${esc(p.display)}</span>${badge}
-           ${p.docs ? `<a class="prov-docs" href="${esc(p.docs)}" target="_blank" rel="noopener">get a key ↗</a>` : ''}
+           ${p.docs ? `<a class="prov-docs" href="${esc(p.docs)}" target="_blank" rel="noopener">${p.key_optional ? 'install one ↗' : 'get a key ↗'}</a>` : ''}
          </div>
          <div class="prov-row">
            <input type="password" class="pv-key" autocomplete="off" spellcheck="false"
-                  placeholder="${p.configured ? esc(p.masked_key) + '  (stored — type to replace)' : esc(p.key_hint || 'paste your API key')}" />
+                  placeholder="${p.masked_key ? esc(p.masked_key) + '  (stored — type to replace)' : esc(p.key_hint || 'paste your API key')}" />
            <button class="mini-btn primary pv-save">Save</button>
            <button class="mini-btn pv-test">Test</button>
-           ${p.configured && !p.from_env ? `<button class="mini-btn danger pv-clear">Remove</button>` : ''}
+           ${p.masked_key && !p.from_env ? `<button class="mini-btn danger pv-clear">Remove</button>` : ''}
          </div>
          ${p.needs_base_url ? `<div class="prov-row">
            <input type="text" class="pv-url" spellcheck="false" value="${esc(p.base_url || '')}"
                   placeholder="https://your-endpoint/v1  (OpenAI-compatible base URL)" />
          </div>` : ''}
+         ${p.hint ? `<div class="prov-hint">${esc(p.hint)}</div>` : ''}
          <div class="prov-note"></div>`;
 
       const note = card.querySelector('.prov-note');
@@ -1573,7 +1578,11 @@
         const body = {};
         if (keyIn.value.trim()) body.api_key = keyIn.value.trim();
         if (urlIn) body.base_url = urlIn.value.trim();
-        if (!Object.keys(body).length) { say('Nothing to save — paste a key first.', 'err'); return; }
+        if (!Object.keys(body).length) {
+          say(p.key_optional ? 'Nothing to save — fill in the address first.'
+                             : 'Nothing to save — paste a key first.', 'err');
+          return;
+        }
         say('Saving…');
         const res = await jsend(`/api/settings/providers/${p.id}`, body);
         settings.providers = res.providers; settings.models = res.models;
@@ -1611,7 +1620,7 @@
          <span class="model-name">${esc(m.display)}</span>
          <span class="model-meta">${esc(m.provider_display)} · ${esc(m.model_name)}</span>
          <span class="model-spacer"></span>
-         <span class="model-flag ${m.ready ? 'ready' : 'nokey'}">${m.ready ? 'ready' : 'no key'}</span>
+         <span class="model-flag ${m.ready ? 'ready' : 'nokey'}">${m.ready ? 'ready' : esc(m.blocked || 'no key')}</span>
          ${m.custom ? '<span class="model-flag">custom</span>' : ''}
          <button class="mini-btn md-edit">Edit</button>
          <button class="mini-btn danger md-del">${m.custom ? 'Delete' : 'Disable'}</button>`;
@@ -2129,7 +2138,8 @@
       addMsg({
         kind: 'error',
         html: 'No model is available yet. Open <b>Tools → Settings</b> and paste an API key '
-            + '(the key is stored on the server, not in this browser).',
+            + '(the key is stored on the server, not in this browser), or point the '
+            + '<b>Local model</b> entry at a server of your own and fetch what it is serving.',
       });
     }
     setTimeout(() => map.invalidateSize(), 60);

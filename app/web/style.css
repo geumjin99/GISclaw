@@ -499,6 +499,7 @@ button { font:inherit; color:inherit; }
 }
 .prov-row input:focus { outline:none; border-color:var(--accent); }
 .prov-note { font-size:11px; color:var(--ink-muted); margin-top:7px; }
+.prov-hint { font-size:11px; color:var(--ink-muted); margin-top:7px; line-height:1.5; }
 .prov-note.ok { color:var(--ok); }
 .prov-note.err { color:var(--danger); }
 .mini-btn {

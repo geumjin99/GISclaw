@@ -16,8 +16,9 @@
 LLM engines.
 
 Two backends, one interface: `OpenAIEngine` for OpenAI and every
-OpenAI-compatible endpoint (DeepSeek, Gemini's compatibility layer, and any
-custom base_url), and `ClaudeEngine` for Anthropic. Both expose the same
+OpenAI-compatible endpoint (DeepSeek, Gemini's compatibility layer, a model
+served on your own machine by Ollama/LM Studio/vLLM, and any custom base_url),
+and `ClaudeEngine` for Anthropic. Both expose the same
 `load_model()` / `generate()` / `get_stats()` surface, so the agent does not
 care which one it is holding.
 
@@ -27,15 +28,40 @@ it (the product turns the first one into an aborted run rather than letting
 the loop retry blindly).
 """
 import os
+import re
 import time
 from typing import Optional, Dict, Any, List
+
+# Open-weight reasoning models (Qwen3, the R1 distills, and most of what a local
+# server hosts) put their scratch work in <think>…</think> ahead of the answer.
+# The ReAct loop parses the reply line by line and would read that as the model
+# failing to produce an Action, so it never gets that far.
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.S | re.I)
+
+
+def strip_reasoning(text: str) -> str:
+    """Drop a leading reasoning block, keeping only what follows it."""
+    if not text or "think>" not in text.lower():
+        return text
+    text = _THINK_BLOCK.sub("", text)
+    low = text.lower()
+    # Some servers emit the closing tag only, having eaten the opening one.
+    if "</think>" in low:
+        text = text[low.rindex("</think>") + len("</think>"):]
+    # An unclosed block means the reply ran out of room mid-thought: there is no
+    # answer in it, and passing the raw monologue on would only confuse the loop.
+    elif "<think>" in low:
+        text = text[:low.index("<think>")]
+    return text.strip()
 
 
 class OpenAIEngine:
     """OpenAI Chat Completions, and anything that speaks the same protocol.
 
-    Point `base_url` at DeepSeek, Gemini's compatibility layer or a private
-    endpoint and the rest of the code is unchanged.
+    Point `base_url` at DeepSeek, Gemini's compatibility layer, a local server
+    (Ollama, LM Studio, vLLM) or a private endpoint and the rest of the code is
+    unchanged. A local server usually wants no credential at all; pass any
+    placeholder, since the client refuses to start with an empty one.
     """
 
     def __init__(
@@ -156,7 +182,7 @@ class OpenAIEngine:
 
             # A thinking model sometimes comes back with no content at all.
             raw_content = response.choices[0].message.content
-            text = raw_content.strip() if raw_content else ""
+            text = strip_reasoning(raw_content.strip()) if raw_content else ""
             output_tokens = response.usage.completion_tokens if response.usage else 0
             input_tokens = response.usage.prompt_tokens if response.usage else 0
 

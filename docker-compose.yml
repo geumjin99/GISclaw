@@ -33,6 +33,12 @@ services:
         required: false
     volumes:
       - ${GISCLAW_DATA:-./projects}:/workspace
+    extra_hosts:
+      # Lets the container reach a model server running on your own machine
+      # (Ollama, LM Studio, vLLM). Inside a container "localhost" is the
+      # container, so an address like http://localhost:11434/v1 is rewritten to
+      # this name. macOS and Windows provide it anyway; Linux only with this line.
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
 # ---------------------------------------------------------------------------

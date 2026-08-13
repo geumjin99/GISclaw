@@ -114,6 +114,35 @@ class AgentResult:
         }
 
 
+def _escape_newlines_in_strings(text: str) -> str:
+    """Escape literal newlines and tabs that sit inside JSON string values.
+
+    Writing a block of Python into a JSON string without escaping the line
+    breaks is the single most common way a reply fails to parse — small
+    open-weight models do it constantly. The text is otherwise valid JSON, so
+    repairing just the control characters recovers the whole call.
+    """
+    out = []
+    in_string = False
+    escaped = False
+    for ch in text:
+        if not in_string:
+            in_string = ch == '"'
+            out.append(ch)
+            continue
+        if escaped:
+            escaped = False
+        elif ch == "\\":
+            escaped = True
+        elif ch == '"':
+            in_string = False
+        elif ch in "\n\r\t":
+            out.append({"\n": "\\n", "\r": "\\r", "\t": "\\t"}[ch])
+            continue
+        out.append(ch)
+    return "".join(out)
+
+
 def _parse_action(response_text: str) -> Tuple[str, str, Dict[str, Any]]:
     """Split a reply into (thought, action_name, args).
 
@@ -136,7 +165,10 @@ def _parse_action(response_text: str) -> Tuple[str, str, Dict[str, Any]]:
         action_name = action_match.group(1).strip()
     
     # Args — try progressively looser readings
-    args_match = re.search(r'Args:\s*(.*?)$', response_text, re.DOTALL | re.MULTILINE)
+    # Everything after "Args:" to the end of the reply. `$` must not be
+    # multiline here: with MULTILINE it ends at the first line break, which
+    # silently truncates every multi-line argument block to its first line.
+    args_match = re.search(r'Args:\s*(.*)', response_text, re.DOTALL)
     if args_match:
         args_text = args_match.group(1).strip()
         
@@ -167,13 +199,18 @@ def _parse_action(response_text: str) -> Tuple[str, str, Dict[str, Any]]:
                     try:
                         args = json.loads(json_match.group())
                     except (json.JSONDecodeError, ValueError):
-                        # 3: Python literal (single quotes, etc.)
+                        # 3: the same JSON with its line breaks escaped
                         try:
-                            args = ast.literal_eval(json_match.group())
-                        except (ValueError, SyntaxError):
-                            pass
+                            args = json.loads(
+                                _escape_newlines_in_strings(json_match.group()))
+                        except (json.JSONDecodeError, ValueError):
+                            # 4: Python literal (single quotes, etc.)
+                            try:
+                                args = ast.literal_eval(json_match.group())
+                            except (ValueError, SyntaxError):
+                                pass
                 
-                # 4: bare key=value
+                # 5: bare key=value
                 if not args and '=' in args_text:
                     for part in args_text.split(','):
                         if '=' in part:
@@ -191,6 +228,11 @@ def _parse_action(response_text: str) -> Tuple[str, str, Dict[str, Any]]:
             after_args = re.search(r'Args:\s*\{?\}?\s*\n(.*?)$', response_text, re.DOTALL)
             if after_args:
                 raw_code = after_args.group(1).strip()
+                # The opening brace of an unparseable Args block was consumed
+                # above, so its closing one is still here and would be executed
+                # as Python — a bare `}` that fails the whole round.
+                while raw_code.endswith("}") and raw_code.count("}") > raw_code.count("{"):
+                    raw_code = raw_code[:-1].rstrip()
                 if raw_code and not raw_code.startswith('{') and len(raw_code) > 5:
                     args = {"code": raw_code}
     
