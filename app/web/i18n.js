@@ -239,6 +239,21 @@ I18N.register('zh', {
   'Writing the closing note…': '正在写收尾说明…', 'Writing project log…': '正在写项目日志…',
   'Stopped by request after {n} round(s).': '按要求在第 {n} 轮后停止。', '{k} file(s) had been produced by then.': '此前已产出 {k} 个文件。',
   'A run is already in progress. Stop it or wait for it to finish.': '已有一次运行在进行中。请先停止它或等它结束。',
+  // server-provided names and hints
+  'Esri Light Gray (no key · no buildings, zoom to 16)': 'Esri 浅灰底图（免 key · 无建筑，最高 16 级）', 'Esri Street Map (no key)': 'Esri 街道图（免 key）',
+  'Esri Topographic (no key)': 'Esri 地形图（免 key）', 'Esri World Imagery (no key)': 'Esri 卫星影像（免 key）', 'OpenTopoMap (no key)': 'OpenTopoMap（免 key）',
+  'OpenStreetMap (no key · light use only)': 'OpenStreetMap（免 key · 仅限轻量使用）', 'MapTiler (key)': 'MapTiler（需 key）', 'Mapbox (key)': 'Mapbox（需 key）',
+  'Thunderforest (key)': 'Thunderforest（需 key）', 'Custom XYZ template': '自定义 XYZ 模板', 'MBTiles file (offline)': 'MBTiles 文件（离线）', 'No basemap (data only)': '无底图（只显示数据）',
+  "The OpenStreetMap Foundation's own tile servers are for light, occasional use; for regular work use another source or an MBTiles file.": 'OpenStreetMap 基金会的瓦片服务器只供轻量、偶尔使用；日常工作请换其他来源或 MBTiles 文件。',
+  'Any {z}/{x}/{y} service — a national portal, a company server, a tileserver of your own, or a keyed CARTO basemap. Use {key} in the template for a token, {s} for a subdomain, {r} for @2x tiles.': '任何 {z}/{x}/{y} 服务——国家地理信息平台、单位内网、自建 tileserver，或带 key 的 CARTO 底图。模板中用 {key} 代表令牌，{s} 代表子域，{r} 代表 @2x 瓦片。',
+  'A raster .mbtiles on this computer. QGIS makes one from any layers: Processing → Raster tools → Generate XYZ tiles (MBTiles).': '本机上的栅格 .mbtiles 文件。QGIS 可以从任意图层生成：处理 → 栅格工具 → 生成 XYZ 瓦片（MBTiles）。',
+  'Ollama': 'Ollama', 'LM Studio': 'LM Studio', 'vLLM': 'vLLM', 'Other (OpenAI-compatible)': '其他（OpenAI 兼容）',
+  'Local model (Ollama / LM Studio / vLLM)': '本地模型（Ollama / LM Studio / vLLM）', 'Anthropic (Claude)': 'Anthropic（Claude）', 'Google Gemini': 'Google Gemini', 'Custom (OpenAI-compatible)': '自定义（OpenAI 兼容）',
+  'Serve a model first (e.g. `ollama pull qwen2.5-coder:14b`), then press Fetch below to list what it is serving. Nothing leaves your machine with these — see Help → About.': '先在本机启动一个模型服务（例如 `ollama pull qwen2.5-coder:14b`），然后在下方点「获取」列出它提供的模型。使用本地模型时数据不会离开本机——见 帮助 → 关于。',
+  '24 GB': '24 GB', '16 GB (not a 16 GB Mac)': '16 GB（16 GB 的 Mac 不够）', '16 GB': '16 GB',
+  'Completed the full urban-heat workflow in 12 rounds with no help.': '无需干预，12 轮完成了完整的城市热岛分析流程。',
+  'Reliable on 3–5 step tasks; the usual choice on a desktop GPU.': '3–5 步的任务表现稳定；台式机显卡上的常用选择。',
+  'Mixture-of-experts; fast, adequate planning.': '混合专家模型；速度快，规划能力够用。',
 });
 
 /* ---------------------------------------------------------------- 한국어 -- */
@@ -396,4 +411,19 @@ I18N.register('ko', {
   'Writing the closing note…': '마무리 메모 작성 중…', 'Writing project log…': '프로젝트 로그 작성 중…',
   'Stopped by request after {n} round(s).': '요청에 따라 {n}라운드 후 중지했습니다.', '{k} file(s) had been produced by then.': '그때까지 파일 {k}개가 생성되었습니다.',
   'A run is already in progress. Stop it or wait for it to finish.': '이미 실행이 진행 중입니다. 중지하거나 끝날 때까지 기다리세요.',
+  // server-provided names and hints
+  'Esri Light Gray (no key · no buildings, zoom to 16)': 'Esri 라이트 그레이(키 불필요 · 건물 없음, 16레벨까지)', 'Esri Street Map (no key)': 'Esri 도로 지도(키 불필요)',
+  'Esri Topographic (no key)': 'Esri 지형도(키 불필요)', 'Esri World Imagery (no key)': 'Esri 위성 영상(키 불필요)', 'OpenTopoMap (no key)': 'OpenTopoMap(키 불필요)',
+  'OpenStreetMap (no key · light use only)': 'OpenStreetMap(키 불필요 · 가벼운 사용만)', 'MapTiler (key)': 'MapTiler(키 필요)', 'Mapbox (key)': 'Mapbox(키 필요)',
+  'Thunderforest (key)': 'Thunderforest(키 필요)', 'Custom XYZ template': '사용자 정의 XYZ 템플릿', 'MBTiles file (offline)': 'MBTiles 파일(오프라인)', 'No basemap (data only)': '배경 지도 없음(데이터만)',
+  "The OpenStreetMap Foundation's own tile servers are for light, occasional use; for regular work use another source or an MBTiles file.": 'OpenStreetMap 재단의 타일 서버는 가볍고 가끔 쓰는 용도입니다. 일상 작업에는 다른 출처나 MBTiles 파일을 쓰세요.',
+  'Any {z}/{x}/{y} service — a national portal, a company server, a tileserver of your own, or a keyed CARTO basemap. Use {key} in the template for a token, {s} for a subdomain, {r} for @2x tiles.': '{z}/{x}/{y} 형식의 어떤 서비스든 됩니다. 국가 포털, 회사 서버, 직접 띄운 타일 서버, 키가 있는 CARTO 지도 등. 템플릿에서 {key}는 토큰, {s}는 서브도메인, {r}는 @2x 타일입니다.',
+  'A raster .mbtiles on this computer. QGIS makes one from any layers: Processing → Raster tools → Generate XYZ tiles (MBTiles).': '이 컴퓨터의 래스터 .mbtiles 파일. QGIS에서 어떤 레이어로든 만들 수 있습니다: 공간 처리 → 래스터 도구 → XYZ 타일 생성(MBTiles).',
+  'Ollama': 'Ollama', 'LM Studio': 'LM Studio', 'vLLM': 'vLLM', 'Other (OpenAI-compatible)': '기타(OpenAI 호환)',
+  'Local model (Ollama / LM Studio / vLLM)': '로컬 모델(Ollama / LM Studio / vLLM)', 'Anthropic (Claude)': 'Anthropic(Claude)', 'Google Gemini': 'Google Gemini', 'Custom (OpenAI-compatible)': '사용자 정의(OpenAI 호환)',
+  'Serve a model first (e.g. `ollama pull qwen2.5-coder:14b`), then press Fetch below to list what it is serving. Nothing leaves your machine with these — see Help → About.': '먼저 모델을 띄우고(예: `ollama pull qwen2.5-coder:14b`) 아래의 가져오기를 눌러 제공 중인 모델을 확인하세요. 로컬 모델은 데이터가 컴퓨터 밖으로 나가지 않습니다(도움말 → 정보 참고).',
+  '24 GB': '24 GB', '16 GB (not a 16 GB Mac)': '16 GB(16 GB Mac은 부족)', '16 GB': '16 GB',
+  'Completed the full urban-heat workflow in 12 rounds with no help.': '도움 없이 12라운드 만에 도시 열섬 분석 전체 흐름을 완료했습니다.',
+  'Reliable on 3–5 step tasks; the usual choice on a desktop GPU.': '3~5단계 과제에서 안정적. 데스크톱 GPU에서 흔히 쓰는 선택.',
+  'Mixture-of-experts; fast, adequate planning.': '전문가 혼합 모델. 빠르고 계획 능력도 무난합니다.',
 });

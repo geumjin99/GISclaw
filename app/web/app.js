@@ -279,7 +279,7 @@
     host.innerHTML = '';
     const base = document.createElement('div');
     base.className = 'legend-layer';
-    const bmName = basemapInfo ? (basemapInfo.tiles && basemapInfo.ready ? basemapInfo.display : t('offline reference')) : '…';
+    const bmName = basemapInfo ? (basemapInfo.tiles && basemapInfo.ready ? t(basemapInfo.display) : t('offline reference')) : '…';
     base.innerHTML = `<div class="legend-layer-head"><span class="legend-layer-name">${t('Basemap')}</span><span class="legend-layer-meta">${esc(bmName)}</span></div>`;
     host.appendChild(base);
 
@@ -1773,7 +1773,7 @@
           : `<span class="prov-badge">${t('no key')}</span>`;
       card.innerHTML =
         `<div class="prov-head">
-           <span class="prov-name">${esc(p.display)}</span>${badge}
+           <span class="prov-name">${esc(t(p.display))}</span>${badge}
            ${p.key_optional ? `<a class="prov-docs pv-setup" href="#">${t('set up →')}</a>` : ''}
            ${p.docs && !p.key_optional ? `<a class="prov-docs" href="${esc(p.docs)}" target="_blank" rel="noopener">${t('get a key ↗')}</a>` : ''}
          </div>
@@ -1788,7 +1788,7 @@
            <input type="text" class="pv-url" spellcheck="false" value="${esc(p.base_url || '')}"
                   placeholder="https://your-endpoint/v1  (OpenAI-compatible base URL)" />
          </div>` : ''}
-         ${p.hint ? `<div class="prov-hint">${esc(p.hint)}</div>` : ''}
+         ${p.hint ? `<div class="prov-hint">${esc(t(p.hint))}</div>` : ''}
          <div class="prov-note"></div>`;
 
       const note = card.querySelector('.prov-note');
@@ -1922,7 +1922,7 @@
     const kind = $('#localKind');
     if (!kind.options.length) {
       kind.innerHTML = Object.entries(localInfo.presets)
-        .map(([k, p]) => `<option value="${esc(k)}">${esc(p.display)}</option>`).join('');
+        .map(([k, p]) => `<option value="${esc(k)}">${esc(t(p.display))}</option>`).join('');
       kind.addEventListener('change', () => {
         const p = localInfo.presets[kind.value] || {};
         if (p.base_url) $('#localUrl').value = p.base_url;
@@ -1979,7 +1979,7 @@
   function renderLocalReco() {
     $('#localReco').innerHTML = (localInfo.recommended || []).map(r =>
       `<div class="reco-row"><code>ollama pull ${esc(r.name)}</code>`
-      + `<span class="reco-needs">${esc(r.needs)}</span><span class="reco-note">${esc(r.note)}</span>`
+      + `<span class="reco-needs">${esc(t(r.needs))}</span><span class="reco-note">${esc(t(r.note))}</span>`
       + `<button class="mini-btn reco-copy" data-cmd="ollama pull ${esc(r.name)}">${t('Copy')}</button></div>`).join('');
     $$('#localReco .reco-copy').forEach(b => b.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(b.dataset.cmd); b.textContent = t('Copied'); setTimeout(() => { b.textContent = t('Copy'); }, 1500); } catch (e) {}
@@ -2043,13 +2043,13 @@
     $('#bmUrlRow').style.display = sel === 'custom' ? '' : 'none';
     $('#bmAttrRow').style.display = (sel === 'custom' || sel === 'mbtiles') ? '' : 'none';
     $('#bmFileRow').style.display = sel === 'mbtiles' ? '' : 'none';
-    $('#bmHint').textContent = p.hint || '';
+    $('#bmHint').textContent = p.hint ? t(p.hint) : '';
     const docs = $('#bmDocs'); docs.hidden = !p.docs; if (p.docs) docs.href = p.docs;
   }
   async function loadBasemapPane() {
     bmCfg = await jget('/api/settings/basemap');
     const sel = $('#bmProvider');
-    sel.innerHTML = bmCfg.providers.map(p => `<option value="${esc(p.id)}">${esc(p.display)}</option>`).join('');
+    sel.innerHTML = bmCfg.providers.map(p => `<option value="${esc(p.id)}">${esc(t(p.display))}</option>`).join('');
     sel.value = bmCfg.provider;
     $('#bmKey').value = ''; $('#bmKey').placeholder = bmCfg.masked_key ? t('{mask}  (stored — type to replace)', { mask: bmCfg.masked_key }) : t("paste the provider's key");
     $('#bmUrl').value = bmCfg.url || ''; $('#bmAttr').value = bmCfg.attribution || ''; $('#bmFile').value = bmCfg.mbtiles || '';
@@ -2080,7 +2080,7 @@
     if (res.error) { st.textContent = res.error; st.className = 'tf-status err'; return; }
     bmCfg = res; $('#bmKey').value = '';
     applyBasemap(res);
-    st.textContent = res.ready ? t('Applied — {name}.', { name: res.display }) : res.problem;
+    st.textContent = res.ready ? t('Applied — {name}.', { name: t(res.display) }) : res.problem;
     st.className = 'tf-status ' + (res.ready ? 'ok' : 'err');
     if (res.ready) checkBasemap();
   });

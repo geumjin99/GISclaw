@@ -28,7 +28,7 @@
   --code-key:#D7A96D; --code-fn:#8EB4C4; --code-str:#B7A278; --code-cmt:#5A6470; --code-num:#C4896A;
   --shadow-sm:0 1px 2px rgba(26,34,48,.06),0 1px 1px rgba(26,34,48,.04);
   --radius:6px;
-  --font-ui:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo','Noto Sans CJK KR',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --font-ui:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Roboto,'Noto Sans',Arial,sans-serif;
   --font-serif:'Fraunces',Georgia,serif;
   --font-mono:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;
 }
@@ -52,7 +52,7 @@ button { font:inherit; color:inherit; }
 .brand { display:flex; align-items:center; gap:12px; }
 .brand-mark { width:26px; height:26px; color:var(--accent); }
 .brand-text { display:flex; flex-direction:column; line-height:1.05; }
-.brand-name { font-family:var(--font-serif); font-size:18px; font-weight:600; color:var(--ink); letter-spacing:-0.015em; }
+.brand-name { font-family:'Fraunces',Georgia,serif; font-size:18px; font-weight:600; color:var(--ink); letter-spacing:-0.015em; }
 .brand-sub { font-size:10.5px; color:var(--ink-muted); letter-spacing:0.1em; margin-top:2px; font-weight:500; }
 .status {
   display:flex; align-items:center; gap:8px; padding:5px 14px; background:var(--bg);
@@ -834,3 +834,54 @@ body.col-resizing iframe, body.col-resizing .leaflet-container { pointer-events:
 .lang-btn svg { width:15px; height:15px; }
 .menu-drop-right { left:auto; right:0; }
 .menu-lang .menu-item.active { font-weight:600; color:var(--accent); }
+
+/* ------------------------------------------------------------------------
+   Chinese and Korean interfaces. The Latin stacks above have no CJK glyphs,
+   so the browser would fill them from whatever fallback the OS picks — on
+   Windows a serif face for some words and a sans for others, at visibly
+   different sizes. Each language gets fonts that carry its own script, in
+   every role (text, headings, monospaced counters), and the small tracked
+   capitals that suit Latin labels are relaxed: CJK reads best unspaced and
+   a little larger.
+   ------------------------------------------------------------------------ */
+html[lang="zh-CN"] {
+  --font-ui:'PingFang SC','Hiragino Sans GB','Microsoft YaHei UI','Microsoft YaHei','Noto Sans CJK SC','Noto Sans SC','Source Han Sans SC',-apple-system,'Segoe UI',sans-serif;
+  --font-serif:'PingFang SC','Hiragino Sans GB','Microsoft YaHei UI','Microsoft YaHei','Noto Sans CJK SC','Noto Sans SC',sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',Menlo,Consolas,'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',monospace;
+}
+html[lang="ko"] {
+  --font-ui:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans CJK KR','Noto Sans KR','Source Han Sans KR',-apple-system,'Segoe UI',sans-serif;
+  --font-serif:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans CJK KR','Noto Sans KR',sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',Menlo,Consolas,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans CJK KR',monospace;
+}
+html[lang="zh-CN"] body, html[lang="ko"] body { font-size:14px; }
+html[lang="zh-CN"] .modal-title, html[lang="ko"] .modal-title { font-weight:700; }
+html[lang="zh-CN"] .brand-sub, html[lang="ko"] .brand-sub,
+html[lang="zh-CN"] .panel-title, html[lang="ko"] .panel-title,
+html[lang="zh-CN"] .legend-title, html[lang="ko"] .legend-title,
+html[lang="zh-CN"] .tree-subhead, html[lang="ko"] .tree-subhead,
+html[lang="zh-CN"] .code-output-head, html[lang="ko"] .code-output-head,
+html[lang="zh-CN"] .agent-tag, html[lang="ko"] .agent-tag,
+html[lang="zh-CN"] .trace-tag, html[lang="ko"] .trace-tag,
+html[lang="zh-CN"] .viewer-meta .meta-key, html[lang="ko"] .viewer-meta .meta-key,
+html[lang="zh-CN"] .code-run-state, html[lang="ko"] .code-run-state,
+html[lang="zh-CN"] .fx, html[lang="ko"] .fx { letter-spacing:0.02em; text-transform:none; }
+html[lang="zh-CN"] .brand-sub, html[lang="ko"] .brand-sub,
+html[lang="zh-CN"] .panel-title, html[lang="ko"] .panel-title,
+html[lang="zh-CN"] .legend-title, html[lang="ko"] .legend-title,
+html[lang="zh-CN"] .tree-subhead, html[lang="ko"] .tree-subhead,
+html[lang="zh-CN"] .code-output-head, html[lang="ko"] .code-output-head,
+html[lang="zh-CN"] .agent-tag, html[lang="ko"] .agent-tag,
+html[lang="zh-CN"] .trace-tag, html[lang="ko"] .trace-tag,
+html[lang="zh-CN"] .chat-h-badge, html[lang="ko"] .chat-h-badge,
+html[lang="zh-CN"] .tree-meta, html[lang="ko"] .tree-meta,
+html[lang="zh-CN"] .legend-layer-meta, html[lang="ko"] .legend-layer-meta,
+html[lang="zh-CN"] .ts, html[lang="ko"] .ts { font-size:11.5px; }
+html[lang="zh-CN"] .chat-h-sub, html[lang="ko"] .chat-h-sub,
+html[lang="zh-CN"] .foot-line, html[lang="ko"] .foot-line,
+html[lang="zh-CN"] .modal-sub, html[lang="ko"] .modal-sub,
+html[lang="zh-CN"] .prov-hint, html[lang="ko"] .prov-hint,
+html[lang="zh-CN"] .lm-row, html[lang="ko"] .lm-row,
+html[lang="zh-CN"] .reco-row, html[lang="ko"] .reco-row,
+html[lang="zh-CN"] .tf-status, html[lang="ko"] .tf-status,
+html[lang="zh-CN"] .center-footer, html[lang="ko"] .center-footer { font-size:12.5px; }
