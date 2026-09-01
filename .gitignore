@@ -36,3 +36,6 @@ docs/manual/*.tex
 # Local working notes — never publish
 CLAUDE.local.md
 docs/07_lessons/
+
+# Tests
+.pytest_cache/

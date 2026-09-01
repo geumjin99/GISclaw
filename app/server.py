@@ -39,12 +39,8 @@ import asyncio
 import json
 import os
 import queue
-import re
 import shutil
-import unicodedata
 import sys
-import threading
-import time
 from datetime import datetime
 
 APP_VERSION = "1.0.0"
@@ -58,8 +54,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
-from app import data_profile, journal, reflect
-from app.logging_setup import RunRecorder, get_app_logger
+from app import data_profile, journal, paths, reflect, runner
+from app.logging_setup import get_app_logger
 from app.settings_store import PROVIDERS, SettingsStore, mask_key, in_container
 from app.skills_store import SkillsStore
 
@@ -70,672 +66,29 @@ WEB_DIR = os.path.join(PROJECT_ROOT, "app", "web")
 APP_LOG = os.path.join(PROJECT_ROOT, "app", "server.log")
 log = get_app_logger(APP_LOG)
 
-
-def _resolve_workspace() -> str:
-    """Workspace root: env override, else <repo>/projects for local dev."""
-    ws = os.environ.get("GISCLAW_WORKSPACE")
-    if not ws:
-        ws = os.path.join(PROJECT_ROOT, "projects")
-    os.makedirs(ws, exist_ok=True)
-    return os.path.abspath(ws)
-
-
-WORKSPACE = _resolve_workspace()
+# Workspace root: env override, else <repo>/projects for local dev.
+WORKSPACE = paths.configure(os.environ.get("GISCLAW_WORKSPACE")
+                            or os.path.join(PROJECT_ROOT, "projects"))
 log.info(f"Workspace root: {WORKSPACE}")
 
 # Settings live on the mounted volume so they survive container rebuilds.
-# The curated model list now comes from settings_store.BUILTIN_MODELS, which the
-# user can disable, edit, or extend with their own OpenAI-compatible endpoints.
-# Per-project record files, surfaced in the UI tree (read-only).
-RECORD_FILES = ("JOURNAL.md", "LOG.md", "chat.jsonl")
-
 STORE = SettingsStore(WORKSPACE)
 SKILLS = SkillsStore(WORKSPACE, os.path.join(PROJECT_ROOT, "app", "skills"))
 log.info(f"Settings: {STORE.path}")
-
-# System prompt (product free-form mode) — same rules as the v4 ReAct prompt.
-SYSTEM_PROMPT = """You are an expert GIS analyst agent. You solve geospatial analysis tasks by thinking step-by-step and using tools to interact with data in a persistent Python sandbox.
-
-## Available Tools
-
-{tool_descriptions}
-
-## Response Format
-
-You MUST respond in this EXACT format every time:
-
-Thought: <your reasoning about what to do next>
-Action: <tool_name>
-Args: <arguments as JSON object>
-
-## Core Analysis Rules
-{skill_rule}
-1. Start by listing files (list_files), then load and inspect ALL datasets.
-2. Plan your approach in your first Thought.
-3. **Prefer built-in geoprocess operations** for standard GIS steps (reproject,
-   buffer, clip, overlay, spatial/attribute join, dissolve, zonal statistics,
-   slope/aspect/hillshade, rasterize, etc.). They are deterministic and CRS-aware
-   — do NOT hand-write code for anything a geoprocess op already covers.
-4. Use execute() (write code) ONLY for what no geoprocess op covers: custom
-   formulas, bespoke modelling, and visualization/plots.
-5. CRS first — geoprocess handles this for you; in execute() use a projected CRS
-   for distance/area operations.
-6. Schema-driven — read actual column names from data, don't hardcode.
-7. Visualization — plt.savefig() in the SAME execute() call. Never plt.show().
-8. Save ALL final outputs to pred_results/ before calling finish().
-9. After saving, verify: print(os.listdir('pred_results/'))
-
-## Available Packages (these are installed; nothing else is)
-geopandas, rasterio, shapely, fiona, pyproj, rtree, numpy, pandas, scipy,
-matplotlib, seaborn, sklearn, libpysal, esda, momepy, rasterstats, mapclassify,
-networkx, osmnx, h3, openpyxl
-{skills_block}{catalog_block}{data_block}{memory_block}{context_block}"""
-
-# Level 0 — bodies of `always: true` skills. Standing rules, injected every run.
-SKILLS_BLOCK = """
-## Operating skills
-
-{skills}
-"""
-
-# Level 1 — the catalog. One line per on-demand skill; the model opens what it
-# needs with the `skill` tool. This is the only part every call pays for.
-SKILL_CATALOG_BLOCK = """
-## Available skills (load on demand)
-
-Each entry below is a bundle you have NOT read yet: a short router plus reference
-files holding the detailed procedure.
-
-{catalog}
-
-**Before your first Action, decide whether one of them covers this task.** If one
-does, your first Action must be `skill` — reading it after you have already
-started is too late to change the plan, which is the whole point of loading it.
-If none applies, proceed normally and do not mention them again.
-
-- `skill(name)` — read that skill's router and list its bundled files.
-- `skill(name, path)` — read one bundled file, e.g. `references/api.md`.
-
-Follow the router: it tells you which files to read and in what order. Read them
-one at a time, only when a step needs them — never all of them up front.
-"""
-
-# Numbered rules are what the model actually obeys — prose further down the
-# prompt loses to them. So the skill step has to live inside the rule list.
-SKILL_RULE = """
-0. **Skills first.** Check the "Available skills" section at the end of this
-   prompt. If one covers this task, your VERY FIRST action must be
-   `skill(name="…")`, before list_files — its router decides the analysis path,
-   so loading it after you have started is pointless. If none fits, skip this.
-"""
-
-# Level 2, promoted server-side when the task clearly matches a skill. The model
-# keeps the option of going deeper into the bundle on its own.
-SKILL_AUTOLOAD_BLOCK = """
-## Loaded skill: {name}
-
-This skill was matched to the task and loaded for you. Follow it — it defines the
-analysis path. Its reference files are NOT loaded; read them one at a time, as
-its router instructs, with `skill(name="{name}", path="…")`.
-
-{body}
-"""
-
-SKILL_TOOL_DESC = """
-
-skill: Open an available skill, or read one file from its bundle. Use when a listed
-  skill matches the task — its router tells you which of its files to read next.
-  Args: {"name": "<skill name>"} or {"name": "<skill name>", "path": "references/api.md"}
-  Returns: the router text plus a file listing, or the requested file's contents."""
-
-
-def _skill_tool(name: str = "", path: str = "") -> str:
-    """The agent-facing side of progressive disclosure (level 2 and 3)."""
-    overrides = STORE.skill_overrides()
-    name = (name or "").strip()
-    if not name:
-        cat = SKILLS.build_catalog(overrides)
-        return f"Available skills:\n{cat}" if cat else "No skills are enabled."
-    sk = SKILLS.get(name, overrides)
-    if not sk or not sk.get("enabled", False):
-        avail = [s["name"] for s in SKILLS.discover(overrides) if s["enabled"]]
-        return f"❌ No enabled skill named '{name}'. Available: {', '.join(avail) or 'none'}"
-
-    if path:
-        res = SKILLS.read_resource(name, path, overrides)
-        if res.get("error"):
-            files = [r["path"] for r in SKILLS.list_resources(name, overrides) if r["readable"]]
-            return f"❌ {res['error']}\nReadable files in '{name}': {', '.join(files[:40]) or 'none'}"
-        return f"📄 {name}/{path}\n\n{res['text']}"
-
-    files = SKILLS.list_resources(name, overrides)
-    listing = "\n".join(
-        f"  - {f['path']}  ({f['size']} bytes)" + ("" if f["readable"] else "  [not text]")
-        for f in files[:60]) or "  (no bundled files)"
-    more = f"\n  … and {len(files) - 60} more" if len(files) > 60 else ""
-    return (f"📘 Skill: {name}\n\n{sk['body']}\n\n"
-            f"--- Bundled files (read with skill(name=\"{name}\", path=\"…\")) ---\n"
-            f"{listing}{more}")
-
-
-def _skill_tools() -> dict:
-    """The `skill` tool, offered to the agent only when there is one to open."""
-    if not SKILLS.build_catalog(STORE.skill_overrides()):
-        return {}
-    return {"skill": (_skill_tool, SKILL_TOOL_DESC)}
-
-
-# Injected only when non-empty, so a first run in a fresh install pays no tokens.
-MEMORY_BLOCK = """
-## Standing user preferences
-
-These apply to every project. Follow them unless this task says otherwise —
-especially for cartography, symbology and deliverable conventions.
-
-{memory}
-"""
-
-DATA_BLOCK = """
-## Data already in this project
-
-This was read from the files themselves and cached, so relying on it is not
-the same as assuming — it satisfies the rule about taking schema from the data
-rather than from memory. Use these names, coordinate systems and extents to
-plan with; you do not need a discovery round to rediscover them.
-
-This listing is complete for data/, so list_files adds nothing for these — go
-straight to loading what you need. You do still call load_vector / load_raster:
-that puts the data in the sandbox, which reading this cannot do.
-
-It covers structure only. Before you compute on a column you still have to look
-at its values — nulls, ranges, units, and what a join actually matched.
-
-{data}
-"""
-
-CONTEXT_BLOCK = """
-## This project so far
-
-{context}
-"""
-
-# ============================================================
-# Path safety
-# ============================================================
-def _safe_join(root: str, *parts: str) -> str:
-    """Join under root and refuse anything that escapes it (path traversal)."""
-    root = os.path.abspath(root)
-    target = os.path.abspath(os.path.join(root, *parts))
-    if target != root and not target.startswith(root + os.sep):
-        raise ValueError(f"Path escapes root: {target}")
-    return target
-
-
-def _slug(name: str) -> str:
-    """A folder name that is safe on every platform but still readable.
-
-    Non-ASCII is kept deliberately: the old rule stripped it, so a project
-    called 城市热岛分析 collapsed to "project" and the next one collided with
-    it. Only characters a filesystem or shell would object to are replaced.
-    Applying this to its own output must not change it — project ids are
-    re-slugged on every lookup.
-    """
-    s = unicodedata.normalize("NFC", name).strip()
-    s = re.sub(r'[\x00-\x1f<>:"/\\|?*]+', "_", s)
-    s = re.sub(r"\s+", "_", s)
-    s = s.strip("._ ")
-    return s[:80] or "project"
-
-
-# ============================================================
-# Project helpers
-# ============================================================
-def _project_dir(pid: str) -> str:
-    return _safe_join(WORKSPACE, _slug(pid))
-
-
-def _project_layout(pdir: str):
-    for sub in ("data", "outputs", "runs"):
-        os.makedirs(os.path.join(pdir, sub), exist_ok=True)
-
-
-def _read_manifest(pdir: str) -> dict:
-    mpath = os.path.join(pdir, "project.json")
-    if os.path.exists(mpath):
-        try:
-            with open(mpath, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
-
-
-def _write_manifest(pdir: str, manifest: dict):
-    with open(os.path.join(pdir, "project.json"), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
-
-
-def _list_projects() -> list:
-    out = []
-    for name in sorted(os.listdir(WORKSPACE)):
-        pdir = os.path.join(WORKSPACE, name)
-        if not os.path.isdir(pdir):
-            continue
-        if not os.path.exists(os.path.join(pdir, "project.json")):
-            continue  # a project is a folder we created with a manifest
-        m = _read_manifest(pdir)
-        data_dir = os.path.join(pdir, "data")
-        n_data = len([f for f in os.listdir(data_dir)]) if os.path.isdir(data_dir) else 0
-        out.append({
-            "id": name,
-            "name": m.get("name", name),
-            "created_at": m.get("created_at", ""),
-            "notes": m.get("notes", ""),
-            "data_count": n_data,
-        })
-    return out
-
-
-def _dir_tree(base: str) -> list:
-    """Flat list of files under base (relative paths), skipping dotfiles."""
-    items = []
-    if not os.path.isdir(base):
-        return items
-    for root, dirs, files in os.walk(base):
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
-        for fn in sorted(files):
-            if fn.startswith("."):
-                continue
-            rel = os.path.relpath(os.path.join(root, fn), base)
-            items.append(rel)
-    return sorted(items)
-
-
-# ============================================================
-# LLM init — cfg comes fully resolved from SettingsStore.model_config()
-# ============================================================
-def init_llm(cfg: dict):
-    """Build an engine from a resolved model config (engine/api_key/base_url)."""
-    engine = cfg["engine"]
-    key = cfg.get("api_key", "")
-    if not key and cfg.get("key_optional"):
-        # A model served from your own machine authenticates nobody, but the
-        # OpenAI client refuses to start without *something* in the field.
-        key = "local"
-    if not key:
-        raise RuntimeError(
-            f"No API key configured for provider '{cfg.get('provider', '?')}'. "
-            "Open Settings → API keys and paste one (or set the matching "
-            "environment variable), then try again."
-        )
-    if engine == "claude":
-        from src.agent.llm_engine import ClaudeEngine
-        llm = ClaudeEngine(model=cfg["model_name"], api_key=key, temperature=0.1,
-                           max_tokens=cfg["max_tokens"],
-                           cost_per_m=cfg.get("cost_per_m", (3.0, 15.0)))
-    elif engine == "openai":
-        from src.agent.llm_engine import OpenAIEngine
-        llm = OpenAIEngine(model=cfg["model_name"], api_key=key, temperature=0.1,
-                           max_tokens=cfg["max_tokens"],
-                           base_url=cfg.get("base_url") or None,
-                           cost_per_m=cfg.get("cost_per_m", (2.5, 10.0)))
-    else:
-        raise ValueError(f"Unknown engine: {engine}")
-    llm.load_model()
-    return llm
-
-
-# ============================================================
-# Agent run in a thread, streamed via queue + on_step callback
-# ============================================================
-class ApiCallFailed(RuntimeError):
-    """The model provider refused or could not be reached."""
-
-
-# Every engine reports transport and auth failures by *returning* them as the
-# model's text. The ReAct loop then treats "Error code: 401 ..." as a badly
-# formatted reply, retries until it runs out of rounds, and the run ends having
-# produced nothing and explained nothing. One failed call is enough to know the
-# run cannot proceed, so turn it into an exception the caller can report.
-_ENGINE_ERROR_PREFIXES = (
-    "Error during Claude API call:", "Error during API call:",
-    "Error: API client not initialized",
-)
-
-
-def _guard_engine(llm):
-    inner = llm.generate
-
-    def generate(*a, **kw):
-        r = inner(*a, **kw)
-        text = (r or {}).get("text", "")
-        if isinstance(text, str) and text.startswith(_ENGINE_ERROR_PREFIXES):
-            raise ApiCallFailed(text)
-        return r
-
-    llm.generate = generate
-    return llm
-
-
-def _clean_summary(observation: str) -> str:
-    """The agent's own closing words, without the finish tool's packaging.
-
-    `finish` returns "Task complete / Summary: … / Output files (n): …". Only the
-    middle part was written for a person to read; the file list is shown in the
-    interface anyway, and the first line says nothing.
-    """
-    text = (observation or "").strip()
-    if not text:
-        return ""
-    text = re.sub(r"^(?:\U0001F4CB\s*)?Task complete\s*\n?", "", text, flags=re.I)
-    m = re.match(r"\s*Summary:\s*", text)
-    if m:
-        text = text[m.end():]
-    text = re.split(r"\n(?:Output files \(\d+\):|⚠️ No output files)", text)[0]
-    return text.strip()
-
-
-def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: queue.Queue):
-    recorder = None
-    try:
-        cfg = STORE.model_config(model_key)
-        if not cfg:
-            msg_queue.put({"type": "error", "content": f"Unknown model: {model_key}"})
-            return
-        pdir = _project_dir(pid)
-        if not os.path.isdir(pdir):
-            msg_queue.put({"type": "error", "content": f"Project not found: {pid}"})
-            return
-        _project_layout(pdir)
-        data_dir = os.path.join(pdir, "data")
-        manifest = _read_manifest(pdir)
-        project_name = manifest.get("name", pid)
-
-        # The question itself is part of the record, logged before we spend a token.
-        journal.append_chat(pdir, {"role": "user", "text": instruction, "model": model_key})
-
-        run_id = "run_" + datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_dir = os.path.join(pdir, "runs", run_id)
-        os.makedirs(run_dir, exist_ok=True)
-        pred_dir = os.path.join(run_dir, "pred_results")
-        os.makedirs(pred_dir, exist_ok=True)
-
-        recorder = RunRecorder(run_dir)
-        recorder.log(f"model={model_key} instruction={instruction!r}")
-        log.info(f"[{pid}] run {run_id} model={model_key}")
-
-        msg_queue.put({"type": "status", "content": f"Initializing {cfg['display']}...", "run_id": run_id})
-
-        llm = _guard_engine(init_llm(cfg))
-
-        # Intent gate: a question about the project shouldn't become an analysis
-        # run. The agent's finish-guard demands output files, so without this a
-        # "what did you do?" forces it to redo work and write a placeholder just
-        # to be allowed to stop.
-        manifest = _read_manifest(pdir)
-        gate_context = reflect.recent_log(pdir) or journal.build_context(pdir, manifest)
-        verdict = reflect.classify_request(llm, instruction, gate_context)
-        if verdict["mode"] != "analysis":
-            answer = verdict.get("answer", "")
-            recorder.log(f"intent={verdict['mode']} answered without running the agent")
-            journal.append_chat(pdir, {
-                "role": "agent", "run_id": run_id, "model": model_key,
-                "model_display": cfg.get("display", model_key), "ask": instruction,
-                "success": True, "rounds": 0, "self_corrections": 0, "elapsed_s": 0,
-                "outputs": [], "answer": answer, "kind": verdict["mode"],
-            })
-            msg_queue.put({"type": "answer", "mode": verdict["mode"], "content": answer})
-            msg_queue.put({"type": "done", "run_id": run_id, "success": True,
-                           "output_files": [], "rounds": 0, "self_corrections": 0,
-                           "elapsed_s": 0, "cost": {}, "answered": True})
-            return
-
-        from src.agent.error_memory import ErrorMemory
-        from src.agent.react_agent import GISReActAgent
-
-        # Continuity layer: standing user preferences + what this project already did.
-        memory_text = STORE.memory_for_prompt() if STORE.memory_enabled() else ""
-        memory_block = MEMORY_BLOCK.format(memory=memory_text) if memory_text else ""
-        # Prefer the compacted log over the raw ask list — same continuity, far
-        # fewer tokens, and it carries caveats the ask list never had.
-        try:
-            data_text = data_profile.build_block(data_profile.profile_project(pdir))
-        except Exception as e:
-            log.warning(f"data profile failed: {e}")
-            data_text = ""
-        data_block = DATA_BLOCK.format(data=data_text) if data_text else ""
-        digest = reflect.recent_log(pdir)
-        context_text = journal.build_context(pdir, manifest, digest=digest)
-        context_block = CONTEXT_BLOCK.format(context=context_text) if context_text else ""
-        overrides = STORE.skill_overrides()
-        skills_text = SKILLS.build_always_block(overrides)
-        skills_block = SKILLS_BLOCK.format(skills=skills_text) if skills_text else ""
-
-        # Pre-load the one skill this task is about, if any (see SkillsStore.match).
-        matched = SKILLS.match(instruction, overrides) if STORE.skills_auto() else None
-        if matched:
-            body = matched["body"]
-            # Honour the bundle's own manifest.yaml `always_load` list, the
-            # ecosystem convention for fragments a router cannot do without.
-            for frag in SKILLS.manifest_always_load(matched["name"], overrides):
-                body += f"\n\n--- {matched['name']}/{frag['path']} ---\n\n{frag['text']}"
-            skills_block += SKILL_AUTOLOAD_BLOCK.format(name=matched["name"], body=body)
-            log.info(f"[{pid}] skill auto-loaded: {matched['name']} (score {matched['match_score']})")
-            msg_queue.put({"type": "status",
-                           "content": f"Loaded skill: {matched['name']}"})
-
-        catalog_text = SKILLS.build_catalog(overrides, exclude=matched["name"] if matched else "")
-        catalog_block = SKILL_CATALOG_BLOCK.format(catalog=catalog_text) if catalog_text else ""
-
-        # The tool descriptions are only known once the agent has built its
-        # toolkit, so hand it a builder rather than a finished prompt.
-        def build_prompt(tool_descriptions: str) -> str:
-            return SYSTEM_PROMPT.format(
-                tool_descriptions=tool_descriptions,
-                skill_rule=SKILL_RULE if catalog_text else "",
-                skills_block=skills_block,
-                catalog_block=catalog_block,
-                memory_block=memory_block,
-                context_block=context_block,
-                data_block=data_block,
-            )
-
-        recorder.log(f"prompt: always_skills={len(skills_text)}c catalog={len(catalog_text)}c "
-                     f"memory={len(memory_text)}c context={len(context_text)}c "
-                     f"data={len(data_text)}c")
-
-        agent = GISReActAgent(llm_engine=llm, timeout=cfg["timeout"],
-                              max_rounds=cfg["max_rounds"], verbose=True,
-                              error_memory=ErrorMemory(),
-                              system_prompt_builder=build_prompt,
-                              extra_tools=_skill_tools())
-
-        # Track which output files we've already announced
-        seen_outputs = set()
-        steps_log = []          # condensed step list for JOURNAL.md
-
-        def on_step(ev: dict):
-            """Called by the agent after each round — push a live SSE event."""
-            recorder.event(ev)
-            step = {
-                "round": ev.get("round", 0),
-                "action": ev.get("action", ""),
-                "thought": ev.get("thought", ""),
-                "success": ev.get("success", True),
-            }
-            if ev.get("action") == "finish":
-                # The agent's closing write-up — the one place caveats usually land.
-                step["observation"] = ev.get("observation_full") or ev.get("observation") or ""
-            elif ev.get("success") is False:
-                # Keep failures too: they are what a closing note has to explain.
-                step["observation"] = (ev.get("observation_full")
-                                       or ev.get("observation") or "")[:800]
-            steps_log.append(step)
-            step_msg = {
-                "type": "step",
-                "round": ev.get("round", 0),
-                "thought": ev.get("thought", ""),
-                "action": ev.get("action", ""),
-                "code": ev.get("code", ""),
-                "observation": ev.get("observation_full", ev.get("observation", "")),
-                "success": ev.get("success", True),
-            }
-            msg_queue.put(step_msg)
-            # Announce any new result files as they appear
-            if os.path.isdir(pred_dir):
-                for fn in sorted(os.listdir(pred_dir)):
-                    if fn.startswith(".") or fn in seen_outputs:
-                        continue
-                    seen_outputs.add(fn)
-                    msg_queue.put({"type": "result", "run_id": run_id,
-                                   "filename": fn,
-                                   "url": f"/api/projects/{pid}/runfile?run={run_id}&path={fn}"})
-
-        msg_queue.put({"type": "status", "content": "Agent running...", "run_id": run_id})
-        t0 = time.time()
-        result = agent.run(instruction=instruction, data_dir=data_dir,
-                           work_dir=run_dir, on_step=on_step)
-        elapsed = time.time() - t0
-
-        # Copy this run's outputs into the project's own outputs/.
-        out_root = os.path.join(pdir, "outputs")
-        os.makedirs(out_root, exist_ok=True)
-        output_files = []
-        if os.path.isdir(pred_dir):
-            for fn in sorted(os.listdir(pred_dir)):
-                if fn.startswith("."):
-                    continue
-                output_files.append(fn)
-                shutil.copy2(os.path.join(pred_dir, fn), os.path.join(out_root, fn))
-
-        cost_info = {}
-        if hasattr(llm, "get_stats"):
-            s = llm.get_stats()
-            cost_info = {
-                "api_calls": s.get("total_calls", 0),
-                # input_tokens is the uncached remainder only — recording it
-                # alone would make a cached run look far cheaper in tokens than
-                # it was. prompt_tokens is the honest total.
-                "input_tokens": s.get("total_input_tokens", 0),
-                "cache_read_tokens": s.get("cache_read_tokens", 0),
-                "cache_write_tokens": s.get("cache_write_tokens", 0),
-                "prompt_tokens": s.get("prompt_tokens", s.get("total_input_tokens", 0)),
-                "cache_hit_rate": s.get("cache_hit_rate", 0),
-                "output_tokens": s.get("total_output_tokens", 0),
-                "cost_usd": s.get("estimated_cost_usd", 0),
-            }
-
-        recorder.log(f"done success={result.success} rounds={result.total_rounds} "
-                     f"self_corrections={result.self_corrections} outputs={output_files}")
-
-        # Durable record: one conversation entry + one journal section per run.
-        summary = {
-            "role": "agent",
-            "run_id": run_id,
-            "model": model_key,
-            "model_display": cfg.get("display", model_key),
-            "ask": instruction,
-            "success": bool(result.success),
-            "rounds": result.total_rounds,
-            "self_corrections": result.self_corrections,
-            "elapsed_s": round(elapsed, 1),
-            "outputs": output_files,
-            "cost": cost_info,
-        }
-        # Every run ends in words. Normally they are the agent's own, from the
-        # finish call; when it stopped without writing any — out of rounds, stuck
-        # repeating itself — one small call produces the closing note instead, so
-        # the reader is never left with just a row of counters.
-        final_text = _clean_summary(next(
-            (s.get("observation", "") for s in reversed(steps_log)
-             if s.get("action") == "finish"), ""))
-        if not final_text and steps_log:
-            msg_queue.put({"type": "status", "content": "Writing the closing note…"})
-            try:
-                final_text = reflect.closing_note(llm, instruction, summary, steps_log)
-            except Exception as e:
-                log.warning(f"closing note failed: {e}")
-        summary["final_summary"] = final_text
-        msg_queue.put({"type": "summary", "run_id": run_id, "content": final_text,
-                       "outputs": output_files, "success": bool(result.success)})
-        entry = journal.append_chat(pdir, summary)
-        try:
-            journal.append_run(pdir, project_name, dict(entry, steps=steps_log))
-        except Exception as e:
-            log.warning(f"journal write failed: {e}")
-
-        # One extra API call to compact this run into LOG.md — the digest a later
-        # session reads instead of the whole transcript.
-        if STORE.compact_log():
-            try:
-                msg_queue.put({"type": "status", "content": "Writing project log…"})
-                digest = reflect.compact_run(llm, pdir, project_name,
-                                             dict(entry, steps=steps_log), steps_log)
-                if digest:
-                    msg_queue.put({"type": "log", "content": digest})
-            except Exception as e:
-                log.warning(f"log compaction failed: {e}")
-
-        msg_queue.put({
-            "type": "done",
-            "run_id": run_id,
-            "success": bool(result.success),
-            "output_files": output_files,
-            "rounds": result.total_rounds,
-            "self_corrections": result.self_corrections,
-            "elapsed_s": round(elapsed, 1),
-            "cost": cost_info,
-        })
-    except ApiCallFailed as e:
-        # Say what actually happened. A rejected key used to end as a run that
-        # simply produced nothing, which reads like the software is broken.
-        detail = str(e)
-        hint = ("The provider rejected the key. Open Settings \u2192 API keys, "
-                "re-paste it and press Test." if "401" in detail
-                or "authentication" in detail.lower() or "invalid x-api-key" in detail
-                else "Check the key and your connection, then try again.")
-        log.error(f"run aborted, provider call failed: {detail}")
-        if recorder:
-            recorder.log(f"API FAILED {detail}")
-        try:
-            pdir_err = _project_dir(pid)
-            if os.path.isdir(pdir_err):
-                journal.append_chat(pdir_err, {
-                    "role": "agent", "model": model_key, "ask": instruction,
-                    "success": False, "error": detail, "outputs": [],
-                    "rounds": 0, "self_corrections": 0, "elapsed_s": 0,
-                })
-        except Exception:
-            pass
-        msg_queue.put({"type": "error",
-                       "content": f"{cfg.get('display', model_key)} could not be "
-                                  f"reached.\n\n{detail}\n\n{hint}"})
-        msg_queue.put({"type": "done", "run_id": run_id, "success": False,
-                       "output_files": [], "rounds": 0, "self_corrections": 0,
-                       "elapsed_s": 0, "cost": {}})
-        return
-    except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        log.error(f"run failed: {e}\n{tb[-800:]}")
-        if recorder:
-            recorder.log(f"ERROR {e}\n{tb[-800:]}")
-        # A failed run is still history — record it so the conversation is honest.
-        try:
-            pdir_err = _project_dir(pid)
-            if os.path.isdir(pdir_err):
-                journal.append_chat(pdir_err, {
-                    "role": "agent", "model": model_key, "ask": instruction,
-                    "success": False, "error": str(e), "outputs": [],
-                    "rounds": 0, "self_corrections": 0, "elapsed_s": 0,
-                })
-        except Exception:
-            pass
-        msg_queue.put({"type": "error", "content": f"{e}\n{tb[-500:]}"})
-    finally:
-        if recorder:
-            recorder.close()
-        msg_queue.put(None)
+runner.configure(STORE, SKILLS, log)
+
+# Short names for the path helpers the routes use on every request.
+_safe_join = paths.safe_join
+_slug = paths.slug
+_project_dir = paths.project_dir
+_project_layout = paths.project_layout
+_read_manifest = paths.read_manifest
+_write_manifest = paths.write_manifest
+_list_projects = paths.list_projects
+_dir_tree = paths.dir_tree
+_companion_files = paths.companion_files
+_archive_root = paths.archive_root
+RECORD_FILES = paths.RECORD_FILES
 
 
 # ============================================================
@@ -829,7 +182,7 @@ async def api_test_provider(provider_id: str, request: Request):
             "provider": provider_id,
             "cost_per_m": (0.0, 0.0),
         }
-        llm = init_llm(cfg)
+        llm = runner.init_llm(cfg)
         return llm.generate("Reply with the single word: ok")
 
     try:
@@ -1210,34 +563,6 @@ async def api_browse(path: str = ""):
     }
 
 
-# Formats that are really a set of files sharing one stem. Attaching only the
-# .shp yields a layer nothing can open, and a missing .prj silently drops the
-# CRS — so when one member is picked, its siblings travel with it.
-SIDECAR_GROUPS = {
-    ".shp": [".shp", ".shx", ".dbf", ".prj", ".cpg", ".qpj", ".qix", ".sbn",
-             ".sbx", ".fbn", ".fbx", ".ain", ".aih", ".atx", ".shp.xml"],
-    ".tab": [".tab", ".dat", ".map", ".id", ".ind"],
-    ".mif": [".mif", ".mid"],
-}
-_SIDECAR_OF = {ext: grp for grp in SIDECAR_GROUPS.values() for ext in grp}
-
-
-def _companion_files(src: str) -> list:
-    """Every file that has to travel with `src` for it to stay readable."""
-    low = src.lower()
-    ext = ".shp.xml" if low.endswith(".shp.xml") else os.path.splitext(low)[1]
-    group = _SIDECAR_OF.get(ext)
-    if not group:
-        return [src]
-    stem = src[: len(src) - len(ext)]
-    out = []
-    for e in group:
-        for cand in (stem + e, stem + e.upper()):
-            if os.path.isfile(cand) and cand not in out:
-                out.append(cand)
-    return out or [src]
-
-
 @app.post("/api/projects/{pid}/attach")
 async def api_attach(pid: str, request: Request):
     """Copy selected files/dirs (relative to WORKSPACE) into project data/."""
@@ -1474,15 +799,6 @@ async def api_data_check(pid: str):
                         "It may sit in the wrong place on the map, and the agent "
                         "will see CRS = None.")
     return {"notices": notices}
-
-
-ARCHIVE_DIR = "_archived"
-
-
-def _archive_root() -> str:
-    d = os.path.join(WORKSPACE, ARCHIVE_DIR)
-    os.makedirs(d, exist_ok=True)
-    return d
 
 
 @app.post("/api/projects/{pid}/archive")
@@ -1912,75 +1228,6 @@ async def api_runs(pid: str):
     return out
 
 
-def _run_geoprocess_direct(pid: str, op: str, inputs: dict, params: dict, output: str) -> dict:
-    """Run ONE geoprocess op deterministically (no LLM), for the UI Toolbox.
-
-    Loads the selected project files into a fresh sandbox, runs the op, copies
-    outputs to the project's outputs/, and reports them for auto-render.
-    """
-    from src.agent import geo_ops
-    from src.agent.sandbox import PythonSandbox
-    from src.agent.tools import GISToolkit
-
-    if op not in geo_ops.REGISTRY:
-        return {"error": f"unknown op '{op}'"}
-    if not output or not output.isidentifier():
-        return {"error": "invalid output name (must be a valid identifier)"}
-    pdir = _project_dir(pid)
-    if not os.path.isdir(pdir):
-        return {"error": "project not found"}
-    _project_layout(pdir)
-
-    # Resolve each input filename to an absolute path in data/ or outputs/.
-    resolved = {}
-    for role, fname in (inputs or {}).items():
-        cand = None
-        for sub in ("data", "outputs"):
-            try:
-                p = _safe_join(os.path.join(pdir, sub), fname)
-            except ValueError:
-                continue
-            if os.path.isfile(p):
-                cand = p
-                break
-        if cand is None:
-            return {"error": f"input '{role}' file not found: {fname}"}
-        resolved[role] = cand
-
-    kinds = {i["role"]: i["kind"] for i in geo_ops.SPECS.get(op, {}).get("in", [])}
-    tool_dir = os.path.join(pdir, "runs", "tool_" + datetime.now().strftime("%Y%m%d_%H%M%S"))
-    os.makedirs(os.path.join(tool_dir, "pred_results"), exist_ok=True)
-
-    _cwd = os.getcwd()
-    try:
-        sandbox = PythonSandbox(work_dir=tool_dir, timeout=180)
-        tk = GISToolkit(sandbox, data_dir="dataset")
-        for role, path in resolved.items():
-            if kinds.get(role) == "raster":
-                tk.load_raster(path, role)
-            else:
-                tk.load_vector(path, role)
-        obs = tk.geoprocess(op, inputs={r: r for r in resolved},
-                            params=params or {}, output=output)
-    finally:
-        os.chdir(_cwd)
-
-    # Collect outputs and copy into the project outputs/.
-    pred = os.path.join(tool_dir, "pred_results")
-    out_root = os.path.join(pdir, "outputs")
-    os.makedirs(out_root, exist_ok=True)
-    produced = []
-    if os.path.isdir(pred):
-        for fn in sorted(os.listdir(pred)):
-            if fn.startswith("."):
-                continue
-            shutil.copy2(os.path.join(pred, fn), os.path.join(out_root, fn))
-            ext = fn.lower().rsplit(".", 1)[-1]
-            produced.append({"filename": fn, "kind": "raster" if ext in ("tif", "tiff") else "vector"})
-    ok = "❌" not in obs
-    return {"ok": ok, "observation": obs, "outputs": produced}
-
-
 @app.post("/api/projects/{pid}/geoprocess")
 async def api_geoprocess(pid: str, request: Request):
     body = await request.json()
@@ -1988,50 +1235,89 @@ async def api_geoprocess(pid: str, request: Request):
     inputs = body.get("inputs", {})
     params = body.get("params", {})
     output = body.get("output", "") or (op + "_out")
-    result = await asyncio.get_event_loop().run_in_executor(
-        None, lambda: _run_geoprocess_direct(pid, op, inputs, params, output))
+    try:
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: runner.run_geoprocess_direct(pid, op, inputs, params, output))
+    except runner.RunBusy as e:
+        return JSONResponse({"error": str(e), "busy": True}, status_code=409)
     status = 200 if not result.get("error") else 400
     return JSONResponse(result, status_code=status)
 
 
+# ------------------------------------------------------------------- runs --
+async def _stream_run(run):
+    """Everything the run has emitted so far, then the rest as it happens."""
+    snapshot, q = run.subscribe()
+    try:
+        for msg in snapshot:
+            yield {"event": msg["type"], "data": json.dumps(msg, ensure_ascii=False)}
+        if run.done:
+            return
+        while True:
+            try:
+                msg = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: q.get(timeout=20))
+            except queue.Empty:
+                yield {"event": "heartbeat", "data": "{}"}
+                continue
+            if msg is None:
+                break
+            yield {"event": msg["type"], "data": json.dumps(msg, ensure_ascii=False)}
+    finally:
+        run.unsubscribe(q)
+
+
 @app.post("/api/run")
 async def api_run(request: Request):
+    """Start a run and stream it. One at a time — a second request gets 409."""
     body = await request.json()
-    model_key = body.get("model", "gpt-5.4")
+    model_key = body.get("model") or ""
     pid = body.get("project_id", "")
     instruction = (body.get("instruction") or "").strip()
-
-    cfg = STORE.model_config(model_key)
-    if not cfg:
-        return JSONResponse({"error": f"Unknown model: {model_key}"}, status_code=400)
-    if not cfg.get("api_key") and not cfg.get("key_optional"):
-        return JSONResponse(
-            {"error": f"No API key for '{cfg.get('provider')}'. Open Settings → API keys."},
-            status_code=400)
     if not pid:
         return JSONResponse({"error": "project_id required"}, status_code=400)
     if not instruction:
         return JSONResponse({"error": "instruction required"}, status_code=400)
+    if not model_key:
+        ready = [m for m in STORE.models_public() if m["enabled"] and m["ready"]]
+        if not ready:
+            return JSONResponse({"error": "No model is configured. Open Settings → API keys."},
+                                status_code=400)
+        model_key = ready[0]["id"]
+    try:
+        run = runner.start_run(pid, model_key, instruction)
+    except runner.RunBusy as e:
+        active = runner.active_run()
+        return JSONResponse({"error": str(e), "busy": True,
+                             "active": active.public() if active else None}, status_code=409)
+    except FileNotFoundError as e:
+        return JSONResponse({"error": str(e)}, status_code=404)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return EventSourceResponse(_stream_run(run))
 
-    msg_queue: queue.Queue = queue.Queue()
-    thread = threading.Thread(target=run_agent_in_thread,
-                              args=(pid, model_key, instruction, msg_queue), daemon=True)
-    thread.start()
 
-    async def event_generator():
-        while True:
-            try:
-                msg = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: msg_queue.get(timeout=120))
-                if msg is None:
-                    break
-                yield {"event": msg["type"], "data": json.dumps(msg, ensure_ascii=False)}
-            except queue.Empty:
-                yield {"event": "heartbeat", "data": "{}"}
-            except Exception:
-                break
+@app.get("/api/run/active")
+async def api_active_run(project: str = ""):
+    """The run in progress (for this project, if given), so a reloaded page can rejoin it."""
+    run = runner.active_run(project)
+    return {"active": run.public() if run else None}
 
-    return EventSourceResponse(event_generator())
+
+@app.get("/api/run/{run_id}/stream")
+async def api_run_stream(run_id: str):
+    """Rejoin a run: replays what was already emitted, then follows it live."""
+    run = runner.get_run(run_id)
+    if not run:
+        return JSONResponse({"error": "no such run in this session"}, status_code=404)
+    return EventSourceResponse(_stream_run(run))
+
+
+@app.post("/api/run/{run_id}/cancel")
+async def api_cancel_run(run_id: str):
+    """Ask a run to stop. It ends after the current step; running code is interrupted."""
+    ok = runner.cancel_run(run_id)
+    return {"ok": ok, "run_id": run_id}
 
 
 # ============================================================
@@ -2064,4 +1350,9 @@ if os.path.isdir(WEB_DIR):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8765, log_level="info")
+    # Bound to this machine only unless asked otherwise: the sandbox executes
+    # whatever code the model writes, and the settings hold API keys. Inside a
+    # container the port has to be reachable from the host, so all interfaces.
+    host = os.environ.get("GISCLAW_HOST") or ("0.0.0.0" if in_container() else "127.0.0.1")
+    port = int(os.environ.get("GISCLAW_PORT") or 8765)
+    uvicorn.run(app, host=host, port=port, log_level="info")

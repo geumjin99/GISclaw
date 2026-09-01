@@ -22,11 +22,42 @@ Design:
 - stdout truncated from the front, stderr truncated from the tail (to see actual errors)
 - Pre-imports common GIS libraries to reduce model's import burden
 """
+import ctypes
 import io
 import os
+import threading
+import time
 import traceback
 from contextlib import redirect_stdout, redirect_stderr
-from typing import Dict
+from typing import Callable, Dict, Optional
+
+
+class SandboxInterrupt(BaseException):
+    """Raised inside the running snippet when it is cancelled or times out.
+
+    A BaseException, not an Exception, so a snippet's own `except Exception`
+    cannot swallow it.
+    """
+
+
+def _raise_in_thread(thread: threading.Thread, exc_type) -> bool:
+    """Ask the interpreter to raise `exc_type` in `thread` at its next bytecode.
+
+    This is the only way to stop code that is already running in another
+    thread. It takes effect when that thread returns to Python; a snippet deep
+    inside a long C call (a big NumPy operation, a GDAL read) is interrupted
+    only when that call returns.
+    """
+    tid = thread.ident
+    if tid is None:
+        return False
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
+        ctypes.c_ulong(tid), ctypes.py_object(exc_type))
+    if res > 1:
+        # More than one thread state matched — undo, never shotgun the interpreter.
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_ulong(tid), None)
+        return False
+    return res == 1
 
 
 class ExecutionResult:
@@ -77,12 +108,22 @@ class ExecutionResult:
 class PythonSandbox:
     """Interactive Python execution sandbox"""
     
-    def __init__(self, work_dir: str = ".", timeout: int = 60):
+    def __init__(self, work_dir: str = ".", timeout: int = 60,
+                 should_stop: Optional[Callable[[], bool]] = None):
+        """
+        should_stop: optional callable polled while a snippet runs. When it
+            returns True the snippet is interrupted, the same way a timeout
+            interrupts it. This is how a Stop button reaches running code.
+        """
         self.work_dir = os.path.abspath(work_dir)
         self.timeout = timeout
+        self.should_stop = should_stop
         self.namespace = {"__builtins__": __builtins__}
         self.code_history = []  # List of successfully executed code snippets
         self._known_vars = set()  # Track existing variables
+        # A snippet that ignored its interrupt is still running somewhere in
+        # this process. Nothing further can safely share the namespace with it.
+        self.stuck = False
         self._init_environment()
     
     def _init_environment(self):
@@ -104,19 +145,20 @@ import warnings
 warnings.filterwarnings('ignore')
 os.makedirs('pred_results', exist_ok=True)
 """
+        # The working directory is process-wide, so it is borrowed for the
+        # duration of a snippet and handed back — never left pointing here.
+        original_dir = os.getcwd()
         os.chdir(self.work_dir)
-
         try:
             exec(init_code, self.namespace)
             self._known_vars = set(self.namespace.keys())
         except Exception as e:
             print(f"Sandbox init warning: {e}")
         finally:
-            pass  # Stay in work_dir
+            os.chdir(original_dir)
     
     def execute(self, code: str) -> ExecutionResult:
         """Execute code snippet in persistent namespace"""
-        import time
 
         # Import blocker: intercept unavailable packages before execution
         BLOCKED_PACKAGES = {
@@ -140,35 +182,71 @@ os.makedirs('pred_results', exist_ok=True)
                         execution_time=0.0,
                     )
         
+        if self.stuck:
+            return ExecutionResult(
+                stdout="", success=False, new_vars={}, execution_time=0.0,
+                stderr="❌ The previous snippet could not be interrupted and is "
+                       "still running. This session cannot execute more code.")
+
         # Save current variable snapshot
         vars_before = set(self.namespace.keys())
-        
+
         # Capture stdout/stderr
         stdout_buf = io.StringIO()
         stderr_buf = io.StringIO()
-        
+
         t0 = time.time()
         success = True
-        
-        # Switch to working directory
+        interrupted = ""
+
+        # The snippet runs in its own thread so that this one can watch the
+        # clock and the stop flag. Without that, a `while True` written by the
+        # model would hang the whole process with no way back.
         original_dir = os.getcwd()
         os.chdir(self.work_dir)
-        
+        namespace = self.namespace
+
+        def _target():
+            nonlocal success
+            try:
+                exec(code, namespace)
+            except SandboxInterrupt:
+                success = False
+            except BaseException:
+                success = False
+                stderr_buf.write(traceback.format_exc())
+
+        worker = threading.Thread(target=_target, name="sandbox-exec", daemon=True)
         try:
             with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
-                exec(code, self.namespace)
-        except Exception:
-            success = False
-            stderr_buf.write(traceback.format_exc())
+                worker.start()
+                while worker.is_alive():
+                    worker.join(0.2)
+                    if not worker.is_alive():
+                        break
+                    elapsed = time.time() - t0
+                    if self.should_stop and self.should_stop():
+                        interrupted = "⏹ Execution stopped by the user."
+                    elif elapsed > self.timeout:
+                        interrupted = (f"⏰ Execution took longer than the "
+                                       f"{self.timeout}s limit and was stopped.")
+                    if interrupted:
+                        _raise_in_thread(worker, SandboxInterrupt)
+                        # Give it a moment to unwind; a snippet stuck inside a
+                        # C call will not, and then the session is over.
+                        worker.join(5.0)
+                        if worker.is_alive():
+                            self.stuck = True
+                            interrupted += (" The code did not respond to the "
+                                            "interrupt; this session is closed.")
+                        success = False
+                        break
         finally:
-            elapsed = time.time() - t0
             os.chdir(original_dir)
-            # Reported after the fact: the snippet runs in this thread, so it
-            # cannot be interrupted part-way.
-            if elapsed > self.timeout:
-                success = False
-                stderr_buf.write(f"\n⏰ Execution took {elapsed:.1f}s, exceeding limit of {self.timeout}s")
-        
+
+        if interrupted:
+            stderr_buf.write("\n" + interrupted)
+
         exec_time = time.time() - t0
         
         # Detect new/modified variables

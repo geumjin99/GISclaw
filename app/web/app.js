@@ -597,6 +597,7 @@
     resetCounters(); resetCode(); resetImageView();
     await loadHistory();          // the conversation survives reloads and restarts
     setTimeout(() => map.invalidateSize(), 30);
+    attachActiveRun();            // and so does a run that was in progress
   }
 
   async function refreshTree() {
@@ -900,31 +901,40 @@
     addMsg({ kind: 'system', text: 'Started a new conversation. The previous one is archived in the project folder, and JOURNAL.md still holds every run.' });
   }
 
+  // Per-run UI state, shared by a fresh start and by rejoining a run after a
+  // reload. `rid` is this page's own counter; the server's id arrives in the
+  // first event and is what Stop is addressed to.
+  function beginRunUI(instruction) {
+    const rid = ++state.runId;
+    state.running = true;
+    state.serverRun = null;
+    state.traceEl = null; state.traceCount = 0;
+    // Status lines that arrive after a bubble has been folded belong to no
+    // bubble at all — without this reset they would surface inside the *next*
+    // run's reasoning.
+    state.traceDone = false; state.pendingStatus = []; state.traceRounds = 0;
+    state.gotSummary = false; state.finishObs = '';
+    resetRunUI();
+    if (instruction) addMsg({ kind: 'user', text: instruction });
+    $('#startBtn').classList.add('hidden'); $('#stopBtn').classList.remove('hidden');
+    $('#stopBtn').disabled = false;
+    setStatus('Running', 'running'); startTimer();
+    return rid;
+  }
+
   async function runAnalysis() {
     if (state.running || !state.project) return;
     const instruction = $('#promptInput').value.trim();
     if (!instruction) { addMsg({ kind: 'error', text: 'Please describe the analysis first.' }); return; }
     if (!state.tree || !state.tree.data.length) { addMsg({ kind: 'error', text: 'This project has no data yet. Add data first.' }); return; }
     if (!$('#modelSelect').value) {
-      addMsg({ kind: 'error', html: 'No model configured — open <b>Tools → Settings</b> and add an API key first.' });
+      addMsg({ kind: 'error', html: 'No model configured — open <b>Settings → API keys</b> and add one first.' });
       return;
     }
-
-    const rid = ++state.runId;
-    state.running = true;
-    state.traceEl = null; state.traceCount = 0;
-    // Per-run flags. Status lines that arrive after a bubble has been folded
-    // belong to no bubble at all — without this reset they would surface inside
-    // the *next* run's reasoning.
-    state.traceDone = false; state.pendingStatus = []; state.traceRounds = 0;
-    state.gotSummary = false; state.finishObs = '';
-    resetRunUI();
-    // Echo the prompt as the user's own turn, then clear the box — otherwise the
-    // text sits there and the next run silently re-sends it.
-    addMsg({ kind: 'user', text: instruction });
+    const rid = beginRunUI(instruction);
+    // Clear the box now — otherwise the text sits there and the next run
+    // silently re-sends it.
     $('#promptInput').value = '';
-    $('#startBtn').classList.add('hidden'); $('#stopBtn').classList.remove('hidden');
-    setStatus('Running', 'running'); startTimer();
 
     let resp;
     try {
@@ -933,7 +943,20 @@
         body: JSON.stringify({ project_id: state.project.id, model: $('#modelSelect').value, instruction }),
       });
     } catch (e) { finishRun(rid, false, 'Network error'); return; }
+    if (!resp.ok || (resp.headers.get('content-type') || '').includes('application/json')) {
+      // Refused before it started: another run is active, or the request was bad.
+      let err = `Could not start (${resp.status}).`;
+      try { const j = await resp.json(); err = j.error || err; } catch (e) {}
+      finishRun(rid, false, err);
+      if (resp.status === 409) attachActiveRun();
+      return;
+    }
+    await consumeStream(resp, rid);
+  }
 
+  // Read one SSE response to its end. Frames are separated by a blank line;
+  // the server writes CRLF, so both line endings are accepted.
+  async function consumeStream(resp, rid) {
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
     let buf = '';
@@ -950,6 +973,29 @@
         handleSSE(block, rid);
       }
     }
+    // The stream ended without a `done` event: the server went away mid-run.
+    if (rid === state.runId && state.running) finishRun(rid, false, 'The connection to the server was lost.');
+  }
+
+  // A run keeps going on the server when this page reloads. If one is active
+  // for this project, rejoin it: the server replays every event from the start.
+  async function attachActiveRun() {
+    if (!state.project || state.running) return;
+    let info;
+    try { info = await jget(`/api/run/active?project=${encodeURIComponent(state.project.id)}`); }
+    catch (e) { return; }
+    const run = info && info.active;
+    if (!run || run.done) return;
+    const rid = beginRunUI(null);
+    state.serverRun = run.run_id;
+    state.startedAt = Math.round(run.started * 1000);
+    addMsg({ kind: 'system', text: `Rejoined the run in progress (${run.run_id}).` });
+    if (run.stopping) { setStatus('Stopping…', 'running'); $('#stopBtn').disabled = true; }
+    let resp;
+    try { resp = await fetch(`/api/run/${encodeURIComponent(run.run_id)}/stream`); }
+    catch (e) { finishRun(rid, false, 'Network error'); return; }
+    if (!resp.ok) { finishRun(rid, false, `Could not rejoin the run (${resp.status}).`); return; }
+    await consumeStream(resp, rid);
   }
 
   function handleSSE(block, rid) {
@@ -962,6 +1008,7 @@
     let msg; try { msg = JSON.parse(data); } catch (e) { return; }
 
     if (ev === 'heartbeat') return;
+    if (ev === 'run') { state.serverRun = msg.run_id; return; }
     if (ev === 'status') { traceStatus(msg.content); return; }
     if (ev === 'answer') {
       // Answered from the project record — no analysis run was needed.
@@ -1052,8 +1099,10 @@
     if (rid !== state.runId) return;
     stopTimer();
     state.running = false;
+    state.serverRun = null;
     $('#startBtn').classList.remove('hidden'); $('#stopBtn').classList.add('hidden');
-    setStatus(success ? 'Done' : 'Stopped', success ? 'done' : '');
+    $('#stopBtn').disabled = false;
+    setStatus(success ? 'Done' : (done && done.stopped ? 'Stopped' : 'Failed'), success ? 'done' : '');
     if (done && done.answered) {
       setStatus('Idle', '');
       return;                       // answered from the record; nothing was run
@@ -1079,16 +1128,25 @@
       runAnalysis();
     }
   });
-  $('#stopBtn').addEventListener('click', () => {
-    state.runId++; state.running = false; stopTimer();
-    setStatus('Stopped', '');
-    $('#startBtn').classList.remove('hidden'); $('#stopBtn').classList.add('hidden');
+  $('#stopBtn').addEventListener('click', async () => {
+    if (!state.running) return;
+    // The run ends on the server, not here: the current step is interrupted
+    // and the run records itself as stopped, which then arrives as `done`.
+    $('#stopBtn').disabled = true;
+    setStatus('Stopping…', 'running');
+    if (state.serverRun) {
+      try { await jpost(`/api/run/${encodeURIComponent(state.serverRun)}/cancel`, {}); } catch (e) {}
+    } else {
+      // No server id yet — nothing to address. Drop the stream.
+      finishRun(state.runId, false, 'Stopped.');
+    }
   });
   // "Clear" resets the view, then restores the conversation from disk — the
   // record is the source of truth, not whatever this tab happened to render.
+  // A run in progress is not affected; the view simply rejoins it.
   $('#resetBtn').addEventListener('click', async () => {
     state.runId++; state.running = false; stopTimer(); resetRunUI(); clearMap();
-    if (state.project) await loadHistory(); else chatScroll.innerHTML = '';
+    if (state.project) { await loadHistory(); attachActiveRun(); } else chatScroll.innerHTML = '';
   });
 
   // ==================================================================

@@ -86,6 +86,29 @@ Alternatives: pykrige -> scipy.interpolate.griddata; skimage -> scipy.ndimage
 """
 
 
+def _link_dataset(data_dir: str, link: str) -> None:
+    """Expose the project's data as `dataset/` inside the work dir.
+
+    A symlink everywhere it is allowed. Windows only lets administrators (or
+    Developer Mode) create symlinks, so it falls back to a directory junction,
+    which any user may create and which reads the same from Python.
+    """
+    if os.path.islink(link):
+        os.unlink(link)
+    elif os.path.isdir(link) and not os.listdir(link):
+        os.rmdir(link)
+    if os.path.exists(link):
+        return
+    try:
+        os.symlink(data_dir, link, target_is_directory=True)
+        return
+    except (OSError, NotImplementedError):
+        if os.name != "nt":
+            raise
+    import _winapi
+    _winapi.CreateJunction(data_dir, link)
+
+
 class AgentResult:
     """What one run produced."""
     def __init__(self, success: bool = False,
@@ -245,25 +268,32 @@ class GISReActAgent:
     def __init__(self, llm_engine, timeout: int = 60,
                  max_rounds: int = 25, verbose: bool = True,
                  error_memory: ErrorMemory = None,
-                 system_prompt_builder=None, extra_tools: dict = None):
+                 system_prompt_builder=None, extra_tools: dict = None,
+                 context_chars: int = 100_000):
         """
         system_prompt_builder: optional callable taking the toolkit's tool
             descriptions and returning the system prompt. Lets a caller wrap
             the agent in its own prompt without editing this module.
         extra_tools: optional {name: (callable, description)} added to the
             toolkit for this agent, for tools the caller owns.
+        context_chars: how much of the transcript is sent back each round.
+            Beyond this the earliest rounds are dropped and summarised as
+            omitted. Set it from the model's context window — a small local
+            model wants a few thousand characters, a frontier model can take
+            the whole run.
         """
         self.llm = llm_engine
         self.timeout = timeout
         self.max_rounds = max_rounds
         self.verbose = verbose
+        self.context_chars = max(4000, int(context_chars or 100_000))
         self._loaded_crs = {}  # {var_name: crs_string}
         self.error_memory = error_memory or ErrorMemory()
         self.system_prompt_builder = system_prompt_builder
         self.extra_tools = extra_tools or {}
     
     def run(self, instruction: str, data_dir: str, work_dir: str,
-            on_step=None) -> AgentResult:
+            on_step=None, should_stop=None) -> AgentResult:
         """Work through `instruction` against the data in `data_dir`.
 
         Everything happens under `work_dir`: `data_dir` is linked in as
@@ -274,8 +304,12 @@ class GISReActAgent:
         live display. It receives the round record plus `code` (the full
         snippet, for execute) and `observation_full` (untruncated). Exceptions
         raised by it are swallowed — display must never break a run.
+        should_stop: optional callable polled before every round and while a
+        snippet runs. Returning True ends the run at the next opportunity and
+        interrupts any code executing at that moment.
         """
         t0 = time.time()
+        stopped = False
 
         def _emit(action_name=None, args=None, observation=None):
             """Push the round just recorded to the on_step callback."""
@@ -297,13 +331,10 @@ class GISReActAgent:
         os.makedirs(pred_dir, exist_ok=True)
         
         # Expose the project's data as dataset/
-        ds_link = os.path.join(work_dir, "dataset")
-        if os.path.islink(ds_link):
-            os.unlink(ds_link)
-        if not os.path.exists(ds_link):
-            os.symlink(os.path.abspath(data_dir), ds_link)
-        
-        sandbox = PythonSandbox(work_dir=work_dir, timeout=self.timeout)
+        _link_dataset(os.path.abspath(data_dir), os.path.join(work_dir, "dataset"))
+
+        sandbox = PythonSandbox(work_dir=work_dir, timeout=self.timeout,
+                                should_stop=should_stop)
         toolkit = GISToolkit(sandbox, data_dir="dataset")
         for name, (fn, desc) in self.extra_tools.items():
             toolkit.tools[name] = fn
@@ -333,6 +364,11 @@ class GISReActAgent:
         self._recent_code_hashes = []
         
         for round_num in range(1, self.max_rounds + 1):
+            if should_stop and should_stop():
+                stopped = True
+                if self.verbose:
+                    print("\n  stopped by the caller")
+                break
             # Two rounds left: tell it to save now.
             remaining = self.max_rounds - round_num
             if remaining == 2 and history:
@@ -362,7 +398,6 @@ class GISReActAgent:
                 prompt="",
                 system_prompt=system_prompt,
                 user_message=conversation_text,
-                max_tokens=2048,
                 stop=["Observation:"],
                 **gen_kwargs,
             )
@@ -618,6 +653,17 @@ class GISReActAgent:
                 print(f"       🔧 {action_name}({args_short})")
             
             observation = toolkit.run(action_name, args)
+            if should_stop and should_stop():
+                stopped = True
+                history.append(("assistant", raw_text))
+                history.append(("user", f"Observation: {observation}"))
+                round_details.append({
+                    "round": round_num, "thought": thought[:200], "action": action_name,
+                    "args_summary": str(args)[:100],
+                    "observation": observation[:500], "success": False, "gen_time_ms": gen_time,
+                })
+                _emit(action_name, args, observation)
+                break
 
             # Track the CRS of everything loaded, and say so when they diverge.
             if action_name in ('load_vector', 'load_raster'):
@@ -680,7 +726,8 @@ class GISReActAgent:
             _emit(action_name, args, observation)
 
         # Out of rounds: save whatever is in the sandbox rather than nothing.
-        if not finished:
+        # A run the user stopped is left as it is — they asked for it to end.
+        if not finished and not stopped and not sandbox.stuck:
             emergency_code = (
                 "import os\n"
                 "os.makedirs('pred_results', exist_ok=True)\n"
@@ -747,6 +794,8 @@ class GISReActAgent:
         success = finished and len(real_output_files) > 0
         if not finished and len(real_output_files) > 0:
             success = True   # ran out of rounds, but produced real results
+        if stopped:
+            success = False
         total_time = (time.time() - t0) * 1000
         
         if self.verbose:
@@ -756,7 +805,7 @@ class GISReActAgent:
                   f"self-corrections {self_corrections} | "
                   f"{total_time/1000:.1f}s")
         
-        return AgentResult(
+        result = AgentResult(
             success=success,
             code=full_code,
             history=round_details,
@@ -765,6 +814,8 @@ class GISReActAgent:
             total_rounds=round_num,
             self_corrections=self_corrections,
         )
+        result.stopped = stopped
+        return result
     
     def _validate_outputs(self, work_dir: str) -> str:
         """Report anything in pred_results/ that looks empty. '' if all fine."""
@@ -824,7 +875,7 @@ class GISReActAgent:
                 parts.append(f"\n{content}")
         parts.append("\nNow continue with the next step. Respond with Thought/Action/Args:")
 
-        if len("\n".join(parts)) > 16000 or len(parts) < 4:
+        if len("\n".join(parts)) > self.context_chars or len(parts) < 4:
             return None
         # stable + volatile must re-join to exactly what _format_conversation
         # produces, or the model sees a different prompt than it used to.
@@ -846,9 +897,13 @@ class GISReActAgent:
         
         # Keep the task and the most recent rounds when it gets long.
         full_text = "\n".join(parts)
-        if len(full_text) > 16000:
+        if len(full_text) > self.context_chars:
+            # Drop whole exchanges from the front until it fits, keeping the
+            # task and at least the last few rounds.
             header = parts[0]
-            recent = "\n".join(parts[-14:])
-            full_text = header + "\n\n... (earlier steps omitted) ...\n\n" + recent
+            tail = parts[1:]
+            while len(tail) > 14 and len(header) + sum(len(x) + 1 for x in tail) > self.context_chars:
+                tail = tail[2:]
+            full_text = header + "\n\n... (earlier steps omitted) ...\n\n" + "\n".join(tail)
         
         return full_text
