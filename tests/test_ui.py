@@ -181,9 +181,9 @@ def test_map_pane(client, browser):
     _wait(lambda: "Applied" in d.find_element(By.ID, "bmStatus").text, what="applied")
     assert "offline reference" in d.find_element(By.ID, "legendLayers").text
     assert d.execute_script("return document.querySelectorAll('.leaflet-tile-pane img').length") == 0
-    d.execute_script("const s = document.getElementById('bmProvider'); s.value = 'esri-gray'; s.dispatchEvent(new Event('change'))")
+    d.execute_script("const s = document.getElementById('bmProvider'); s.value = 'esri-street'; s.dispatchEvent(new Event('change'))")
     d.find_element(By.ID, "bmSave").click()
-    _wait(lambda: "Esri Light Gray" in d.find_element(By.ID, "bmStatus").text, what="esri back")
+    _wait(lambda: "Esri Street" in d.find_element(By.ID, "bmStatus").text, what="esri back")
     errors = [e["message"] for e in d.get_log("browser")
               if e["level"] == "SEVERE" and "favicon" not in e["message"]]
     assert errors == [], errors

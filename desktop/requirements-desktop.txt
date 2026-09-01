@@ -13,5 +13,8 @@ rtree>=1.1
 # --- native window ---
 pywebview>=5.1
 
+# --- certificates for the bundled interpreter's own HTTPS calls ---
+certifi
+
 # --- the app itself (web server, cloud SDKs, analysis packages) ---
 -r ../app/requirements.txt

@@ -27,12 +27,13 @@ import re
 import shutil
 import sqlite3
 import urllib.error
-import urllib.request
+
+from app.net import fetch
 
 PROVIDERS = {
     # Esri's classic tile services are served without a key, with attribution.
     "esri-gray": {
-        "display": "Esri Light Gray (no key)", "key": False,
+        "display": "Esri Light Gray (no key · no buildings, zoom to 16)", "key": False,
         "url": "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
         "attribution": "Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors", "max_zoom": 16},
     "esri-street": {
@@ -82,7 +83,7 @@ PROVIDERS = {
     "none": {"display": "No basemap (data only)", "key": False, "url": "", "attribution": "", "max_zoom": 22},
 }
 
-DEFAULTS = {"provider": "esri-gray", "key": "", "url": "", "attribution": "",
+DEFAULTS = {"provider": "esri-street", "key": "", "url": "", "attribution": "",
             "mbtiles": "", "cache": True, "version": 1}
 
 USER_AGENT = "GISclaw (+https://github.com/geumjin99/GISclaw)"
@@ -94,7 +95,7 @@ def settings(store) -> dict:
     out = dict(DEFAULTS)
     out.update({k: v for k, v in data.items() if k in DEFAULTS})
     if out["provider"] not in PROVIDERS:
-        out["provider"] = "esri-gray"
+        out["provider"] = "esri-street"
     return out
 
 
@@ -154,6 +155,30 @@ def public(store) -> dict:
 
 
 # ------------------------------------------------------------------- tiles --
+def check(store) -> dict:
+    """Fetch one tile from the configured source, bypassing the cache."""
+    import time
+    s = settings(store)
+    if s["provider"] == "none":
+        return {"ok": True, "detail": "no basemap"}
+    t0 = time.time()
+    saved = s["cache"]
+    try:
+        data = store.load()
+        # temporarily uncached so the probe really reaches the source
+        data.setdefault("basemap", {})["cache"] = False
+        store.save(data)
+        res, err = tile(store, 3, 4, 2)
+    finally:
+        data = store.load()
+        data.setdefault("basemap", {})["cache"] = saved
+        store.save(data)
+    ms = int((time.time() - t0) * 1000)
+    if res is None:
+        return {"ok": False, "detail": err, "ms": ms}
+    return {"ok": True, "detail": f"{res[1]}, {len(res[0])} bytes", "ms": ms}
+
+
 def cache_dir(store) -> str:
     return os.path.join(store.dir, "tiles")
 
@@ -234,11 +259,9 @@ def tile(store, z: int, x: int, y: int, r: str = ""):
     url = (tpl.replace("{z}", str(z)).replace("{x}", str(x)).replace("{y}", str(y))
               .replace("{r}", r).replace("{key}", s["key"])
               .replace("{s}", random.choice(PROVIDERS[s["provider"]].get("sub") or "a")))
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = resp.read()
-            ctype = (resp.headers.get("Content-Type") or "image/png").split(";")[0].strip()
+        data, ctype = fetch(url, timeout=10, headers={"User-Agent": USER_AGENT})
+        ctype = ctype or "image/png"
     except urllib.error.HTTPError as e:
         return None, f"provider answered {e.code}"
     except Exception as e:

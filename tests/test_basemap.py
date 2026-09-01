@@ -41,7 +41,7 @@ def tiles():
 
 def test_default_and_providers(client):
     cfg = client.get("/api/settings/basemap").json()
-    assert cfg["provider"] == "esri-gray" and cfg["tiles"] and cfg["ready"]
+    assert cfg["provider"] == "esri-street" and cfg["tiles"] and cfg["ready"]
     ids = {p["id"] for p in cfg["providers"]}
     assert {"esri-gray", "esri-imagery", "osm", "maptiler", "mapbox", "custom", "mbtiles", "none"} <= ids
 
@@ -65,6 +65,14 @@ def test_custom_provider_key_proxy_and_cache(client, tiles):
     assert t3.status_code == 204 and "401" in t3.headers["x-tile-error"]
     client.post("/api/settings/basemap/clear_cache")
     assert client.get("/api/settings/basemap").json()["cache_bytes"] == 0
+    # the check reaches the source and says so, cache or not
+    client.post("/api/settings/basemap", json={"key": "secret"})
+    chk = client.get("/api/settings/basemap/check").json()
+    assert chk["ok"] and "image/png" in chk["detail"]
+    client.post("/api/settings/basemap", json={"key": "wrong"})
+    chk = client.get("/api/settings/basemap/check").json()
+    assert not chk["ok"] and "401" in chk["detail"]
+    assert client.get("/api/settings/basemap").json()["cache"] is True
 
 
 def test_mbtiles_offline_file(client):
@@ -89,4 +97,4 @@ def test_none_and_out_of_range(client):
     assert client.get("/api/basemap/tile/2/1/2").status_code == 204
     client.post("/api/settings/basemap", json={"provider": "osm"})
     assert client.get("/api/basemap/tile/2/9/9").status_code == 204   # x,y beyond 2^z
-    client.post("/api/settings/basemap", json={"provider": "esri-gray"})
+    client.post("/api/settings/basemap", json={"provider": "esri-street"})

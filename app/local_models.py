@@ -23,11 +23,11 @@ directly; anything else falls back to the compatible listing.
 
 Standard library only: this is a few small HTTP calls to localhost.
 """
-import json
 import re
 import urllib.error
-import urllib.request
 from urllib.parse import urlsplit, urlunsplit
+
+from app.net import fetch_json
 
 # Where each server listens by default, and what it calls its models.
 PRESETS = {
@@ -60,10 +60,7 @@ RECOMMENDED = [
 
 
 def _get(url: str, timeout: float = 4.0, data: dict = None):
-    req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
-    body = json.dumps(data).encode() if data is not None else None
-    with urllib.request.urlopen(req, data=body, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8") or "null")
+    return fetch_json(url, timeout=timeout, data=data)
 
 
 def native_root(base_url: str) -> str:

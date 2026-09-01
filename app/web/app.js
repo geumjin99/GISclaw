@@ -181,8 +181,10 @@
     basemapInfo = cfg;
     if (baseLayer) { map.removeLayer(baseLayer); baseLayer = null; }
     if (cfg && cfg.tiles && cfg.ready) {
+      // The map may zoom past what the source draws; beyond maxNativeZoom
+      // Leaflet scales the last native level instead of showing nothing.
       baseLayer = L.tileLayer(`/api/basemap/tile/{z}/{x}/{y}?r={r}&v=${cfg.version}`, {
-        attribution: esc(cfg.attribution || ''), maxZoom: cfg.max_zoom || 19, maxNativeZoom: cfg.max_zoom || 19,
+        attribution: esc(cfg.attribution || ''), maxZoom: 22, maxNativeZoom: cfg.max_zoom || 19,
         errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
       }).addTo(map);
     }
@@ -2056,6 +2058,17 @@
     const mb = (bmCfg.cache_bytes || 0) / 1048576;
     $('#bmStatus').textContent = (bmCfg.ready ? '' : bmCfg.problem + ' ') + t('Cache: {mb} MB.', { mb: mb.toFixed(1) });
     $('#bmStatus').className = 'tf-status' + (bmCfg.ready ? '' : ' err');
+    if (bmCfg.ready) checkBasemap();
+  }
+  // Fetch one real tile through the server and say what happened — the
+  // question "why is my map blank" answered in one line.
+  async function checkBasemap() {
+    const st = $('#bmStatus');
+    let res;
+    try { res = await jget('/api/settings/basemap/check'); } catch (e) { return; }
+    const cache = st.textContent;
+    st.textContent = (res.ok ? t('Source reachable ({ms} ms).', { ms: res.ms || 0 }) : t('Source failed: {detail}', { detail: res.detail || '' })) + ' ' + cache;
+    st.className = 'tf-status ' + (res.ok ? 'ok' : 'err');
   }
   $('#bmProvider').addEventListener('change', bmRows);
   $('#bmSave').addEventListener('click', async () => {
@@ -2069,6 +2082,7 @@
     applyBasemap(res);
     st.textContent = res.ready ? t('Applied — {name}.', { name: res.display }) : res.problem;
     st.className = 'tf-status ' + (res.ready ? 'ok' : 'err');
+    if (res.ready) checkBasemap();
   });
   $('#bmClear').addEventListener('click', async () => {
     await jpost('/api/settings/basemap/clear_cache', {});

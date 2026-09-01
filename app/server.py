@@ -43,7 +43,7 @@ import shutil
 import sys
 from datetime import datetime
 
-APP_VERSION = "2.0.0-beta.5"
+APP_VERSION = "2.0.0-beta.6"
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -370,6 +370,12 @@ async def api_set_basemap(request: Request):
     out = basemap.public(STORE)
     out["cache_bytes"] = basemap.cache_size(STORE)
     return out
+
+
+@app.get("/api/settings/basemap/check")
+async def api_basemap_check():
+    """Can a tile actually be fetched from the chosen source right now?"""
+    return await asyncio.get_event_loop().run_in_executor(None, lambda: basemap.check(STORE))
 
 
 @app.post("/api/settings/basemap/clear_cache")
