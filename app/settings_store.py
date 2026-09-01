@@ -347,7 +347,7 @@ class SettingsStore:
             m["enabled"] = True
             ov = overrides.get(mid, {})
             for field in ("display", "model_name", "tier", "timeout", "max_rounds",
-                          "max_tokens", "cost_per_m", "enabled", "provider"):
+                          "max_tokens", "cost_per_m", "enabled", "provider", "context_chars"):
                 if field in ov:
                     m[field] = ov[field]
             merged[mid] = m
@@ -380,6 +380,11 @@ class SettingsStore:
             m.get("base_url") or self.provider_base_url(provider, raw=True))
         cost = cfg.get("cost_per_m") or (0.0, 0.0)
         cfg["cost_per_m"] = tuple(cost)
+        # How much transcript goes back each round. A hosted model can take
+        # the whole run; a server on this machine usually has a small window,
+        # and overrunning it drops the system prompt off the front.
+        if not cfg.get("context_chars"):
+            cfg["context_chars"] = 24_000 if provider == "local" else 100_000
         return cfg
 
     def models_public(self) -> list:
@@ -408,6 +413,8 @@ class SettingsStore:
                 "base_url": m.get("base_url", "") or "",
                 "max_rounds": m.get("max_rounds", 50),
                 "max_tokens": m.get("max_tokens", 4096),
+                "timeout": m.get("timeout", 300),
+                "context_chars": m.get("context_chars") or (24_000 if provider == "local" else 100_000),
                 "cost_per_m": list(m.get("cost_per_m", (0.0, 0.0))),
             })
         out.sort(key=lambda x: (not x["ready"], x["custom"], x["display"].lower()))

@@ -16,6 +16,8 @@ The paper's reference implementation stays on the `paper-v2` branch (tag `v2-gsi
 - Fixes: a replayed run showed its answer twice; a file name shared by data/ and outputs/ made one layer replace the other; a `.json` that is not GeoJSON opens as text.
 - A test suite (`pytest -q tests`).
 - Desktop application (beta): a `.dmg` for macOS and a setup `.exe` for Windows, built by `desktop/build_*`; `install.sh` / `install.ps1` build the same from source. Native window, data in the user data folder.
+- Settings → Local models: pick Ollama, LM Studio or vLLM, connect, see each model's size, quantisation and context length, add it, and test it; the loaded context length is reported and a too-small one explained. Local models get their own defaults (longer timeout, transcript sized to the window).
+- Smaller desktop builds: one GDAL instead of two (fiona dropped in favour of pyogrio), no uvloop, the interpreter's test suite and Tk removed.
 
 ## 1.0.0 — 2026-09-01
 

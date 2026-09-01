@@ -70,6 +70,7 @@
         <div class="menu-drop">
           <div class="menu-item" data-act="set-keys">API keys…</div>
           <div class="menu-item" data-act="set-models">Models…</div>
+          <div class="menu-item" data-act="set-local">Local models…</div>
           <div class="menu-item" data-act="set-skills">Skills…</div>
           <div class="menu-item" data-act="set-memory">Memory…</div>
         </div>
@@ -380,6 +381,7 @@
       <div class="set-tabs">
         <button class="set-tab active" data-pane="keys">API keys</button>
         <button class="set-tab" data-pane="models">Models</button>
+        <button class="set-tab" data-pane="local">Local models</button>
         <button class="set-tab" data-pane="skills">Skills</button>
         <button class="set-tab" data-pane="memory">Memory</button>
       </div>
@@ -430,6 +432,29 @@
             <button class="primary-btn" id="maSave"><span>Save model</span></button>
           </div>
         </div>
+      </div>
+
+      <div class="set-pane hidden" id="paneLocal">
+        <div class="modal-sub">
+          A model served on this computer — Ollama, LM Studio, vLLM — keeps the whole
+          analysis here: nothing is sent to a provider, nothing is billed. Small models plan
+          multi-step work less reliably than the hosted flagships; the ones recommended below
+          have completed this project's benchmark tasks. <b>Context length matters most:</b>
+          a run needs at least <span id="localMinCtx">8,192</span> tokens, or the server
+          silently drops the instructions off the front of the prompt.
+        </div>
+        <div class="ma-title">Server</div>
+        <div class="disc-bar">
+          <select class="model-select" id="localKind"></select>
+          <input class="text-input" id="localUrl" placeholder="http://localhost:11434/v1" spellcheck="false" />
+          <button class="mini-btn primary" id="localConnect">Connect</button>
+          <a class="prov-docs" id="localDocs" target="_blank" rel="noopener" hidden>install ↗</a>
+        </div>
+        <div class="tf-status" id="localStatus"></div>
+        <div class="local-advice hidden" id="localAdvice"></div>
+        <div class="local-models" id="localModels"></div>
+        <div class="ma-title">Recommended models</div>
+        <div class="local-reco" id="localReco"></div>
       </div>
 
       <div class="set-pane hidden" id="paneSkills">

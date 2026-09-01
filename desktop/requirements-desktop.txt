@@ -6,7 +6,6 @@
 geopandas>=1.0
 pyogrio>=0.9
 rasterio>=1.4
-fiona>=1.10
 shapely>=2.0
 pyproj>=3.6
 rtree>=1.1

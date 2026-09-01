@@ -30,13 +30,16 @@ PY="$RES/python/bin/python3"
 
 echo "== Packages"
 uv pip install --python "$PY" --break-system-packages -r desktop/requirements-desktop.txt
-"$PY" -c "import geopandas, rasterio, pyproj, fiona, shapely, fastapi, webview; print('imports ok')"
+"$PY" -c "import geopandas, rasterio, pyproj, pyogrio, shapely, fastapi, webview; print('imports ok')"
 
 echo "== Application files"
 for d in app src desktop examples; do cp -R "$d" "$RES/gisclaw/$d"; done
 for f in LICENSE COPYRIGHT DISCLAIMER.md THIRD_PARTY_NOTICES.md README.md CHANGELOG.md; do cp "$f" "$RES/gisclaw/"; done
 find "$RES/gisclaw" -name __pycache__ -type d -prune -exec rm -rf {} +
 rm -f "$RES/gisclaw/app/server.log"
+
+echo "== Trim what the application never uses"
+bash desktop/prune_python.sh "$RES/python"
 
 echo "== Launcher and bundle metadata"
 cat > "$APP/Contents/MacOS/GISclaw" <<'LAUNCH'
@@ -82,6 +85,6 @@ mkdir -p "$DMGROOT"
 cp -R "$APP" "$DMGROOT/"
 ln -s /Applications "$DMGROOT/Applications"
 DMG="$OUT/GISclaw-$VERSION-macos-$ARCH.dmg"
-hdiutil create -volname "GISclaw" -srcfolder "$DMGROOT" -ov -format UDZO "$DMG" >/dev/null
+hdiutil create -volname "GISclaw" -srcfolder "$DMGROOT" -ov -format ULFO "$DMG" >/dev/null
 rm -rf "$DMGROOT" "$ICONSET"
 ls -lh "$DMG"

@@ -714,6 +714,23 @@ body.col-resizing iframe, body.col-resizing .leaflet-container { pointer-events:
 
 /* Reasoning bubble — one collapsible block per run, so the answer isn't
    buried under sixty Thought/Action/Observation entries. */
+/* Local models pane */
+.local-models { margin:8px 0 14px; border:1px solid var(--line-soft); border-radius:var(--radius); overflow:hidden; }
+.lm-row { display:flex; align-items:center; gap:10px; padding:7px 10px; border-bottom:1px solid var(--line-soft); font-size:12px; }
+.lm-row:last-child { border-bottom:none; }
+.lm-name { font-weight:600; color:var(--ink); flex:0 0 auto; }
+.lm-meta { color:var(--ink-muted); flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lm-ctx { flex:0 0 auto; font-variant-numeric:tabular-nums; }
+.lm-ctx.bad { color:var(--danger); font-weight:600; }
+.lm-ctx.ok { color:var(--ok); }
+.lm-empty { padding:10px; color:var(--ink-muted); font-size:12px; }
+.local-advice { margin:8px 0; padding:8px 10px; border-radius:var(--radius); background:var(--accent-soft); font-size:12px; line-height:1.5; }
+.local-reco { display:flex; flex-direction:column; gap:6px; margin-bottom:8px; }
+.reco-row { display:flex; align-items:center; gap:10px; font-size:12px; padding:6px 10px; border:1px solid var(--line-soft); border-radius:var(--radius); }
+.reco-row code { font-family:var(--font-mono); font-size:11px; color:var(--warm); }
+.reco-needs { color:var(--ink-muted); flex:0 0 auto; }
+.reco-note { color:var(--ink-muted); flex:1 1 auto; }
+
 .trace { border:1px solid var(--line-soft); border-radius:var(--radius);
          background:var(--panel-sink); margin:8px 0; overflow:hidden; }
 .trace-head { display:flex; align-items:center; gap:7px; padding:7px 10px;

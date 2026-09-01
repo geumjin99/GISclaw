@@ -77,11 +77,11 @@ Args: {{"summary": "Analysis complete. Results saved to pred_results/"}}
 4. NEVER use plt.show(). Always use plt.savefig('pred_results/<filename>.png', dpi=150, bbox_inches='tight') then plt.close(). plt.show() does NOT save the figure.
 
 ## Available Packages (ONLY use these)
-geopandas, rasterio, shapely, fiona, pyproj, rtree, numpy, pandas, scipy,
+geopandas, rasterio, shapely, pyogrio, pyproj, rtree, numpy, pandas, scipy,
 matplotlib, seaborn, sklearn, libpysal, esda, momepy, rasterstats, mapclassify,
 networkx, osmnx, h3, openpyxl
 
-NOT available (do NOT import): arcpy, pykrige, skimage, geoplot, cartopy, xarray, mgwr
+NOT available (do NOT import): arcpy, pykrige, skimage, geoplot, cartopy, xarray, mgwr, fiona
 Alternatives: pykrige -> scipy.interpolate.griddata; skimage -> scipy.ndimage
 """
 

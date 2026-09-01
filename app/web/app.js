@@ -1718,6 +1718,8 @@
     $$('.set-tab').forEach(t => t.classList.toggle('active', t.dataset.pane === name));
     $('#paneKeys').classList.toggle('hidden', name !== 'keys');
     $('#paneModels').classList.toggle('hidden', name !== 'models');
+    $('#paneLocal').classList.toggle('hidden', name !== 'local');
+    if (name === 'local') loadLocal();
     $('#paneSkills').classList.toggle('hidden', name !== 'skills');
     $('#paneMemory').classList.toggle('hidden', name !== 'memory');
   }
@@ -1739,7 +1741,8 @@
       card.innerHTML =
         `<div class="prov-head">
            <span class="prov-name">${esc(p.display)}</span>${badge}
-           ${p.docs ? `<a class="prov-docs" href="${esc(p.docs)}" target="_blank" rel="noopener">${p.key_optional ? 'install one ↗' : 'get a key ↗'}</a>` : ''}
+           ${p.key_optional ? `<a class="prov-docs pv-setup" href="#">set up →</a>` : ''}
+           ${p.docs && !p.key_optional ? `<a class="prov-docs" href="${esc(p.docs)}" target="_blank" rel="noopener">get a key ↗</a>` : ''}
          </div>
          <div class="prov-row">
            <input type="password" class="pv-key" autocomplete="off" spellcheck="false"
@@ -1784,6 +1787,8 @@
         else say(res.error || 'Failed.', 'err');
       });
 
+      const setup = card.querySelector('.pv-setup');
+      if (setup) setup.addEventListener('click', e => { e.preventDefault(); switchSetPane('local'); });
       const clr = card.querySelector('.pv-clear');
       if (clr) clr.addEventListener('click', async () => {
         const res = await jsend(`/api/settings/providers/${p.id}`, { clear: true });
@@ -1870,6 +1875,129 @@
     st.className = 'tf-status ok';
     fetchAvailable();
   }
+
+  // ==================================================================
+  // Local models — a server on this machine: find it, see what it serves,
+  // add what fits, and learn the one number that decides whether it works.
+  // ==================================================================
+  let localInfo = null;
+  let localProbe = null;
+
+  async function loadLocal() {
+    localInfo = await jget('/api/settings/local');
+    $('#localMinCtx').textContent = (localInfo.min_context || 8192).toLocaleString();
+    const kind = $('#localKind');
+    if (!kind.options.length) {
+      kind.innerHTML = Object.entries(localInfo.presets)
+        .map(([k, p]) => `<option value="${esc(k)}">${esc(p.display)}</option>`).join('');
+      kind.addEventListener('change', () => {
+        const p = localInfo.presets[kind.value] || {};
+        if (p.base_url) $('#localUrl').value = p.base_url;
+        const docs = $('#localDocs');
+        docs.hidden = !p.docs; if (p.docs) docs.href = p.docs;
+      });
+    }
+    // Guess the server from the saved address, so the form opens on it.
+    const saved = localInfo.base_url || '';
+    const match = Object.entries(localInfo.presets).find(([k, p]) => p.base_url && saved.startsWith(p.base_url.replace(/\/v1\/?$/, '')));
+    kind.value = match ? match[0] : (saved ? 'other' : 'ollama');
+    $('#localUrl').value = saved || (localInfo.presets[kind.value] || {}).base_url || '';
+    kind.dispatchEvent(new Event('change'));
+    if (saved) $('#localUrl').value = saved;
+    renderLocalModels();
+    renderLocalReco();
+  }
+
+  function fmtCtx(n) { return n ? n.toLocaleString() : '?'; }
+
+  function renderLocalModels() {
+    const host = $('#localModels');
+    const added = new Map((localInfo.models || []).map(m => [m.model_name, m]));
+    if (!localProbe) {
+      host.innerHTML = added.size
+        ? [...added.values()].map(m => `<div class="lm-row"><span class="lm-name">${esc(m.model_name)}</span>`
+            + `<span class="lm-meta">added · context ${fmtCtx(m.context_chars)} chars per round</span>`
+            + `<button class="mini-btn lm-test" data-m="${esc(m.model_name)}">Test</button></div>`).join('')
+        : `<div class="lm-empty">Press <b>Connect</b> to see what the server is serving.</div>`;
+    } else {
+      const rows = localProbe.models || [];
+      const running = new Map((localProbe.running || []).map(r => [r.id, r.context]));
+      host.innerHTML = rows.length ? rows.map(m => {
+        const ctx = running.get(m.id) || m.context_set;
+        const ctxLabel = ctx
+          ? `context ${fmtCtx(ctx)}${running.has(m.id) ? ' (loaded)' : ''}`
+          : (m.context_max ? `context up to ${fmtCtx(m.context_max)} · server default applies` : 'context unknown');
+        const bad = ctx && ctx < (localInfo.min_context || 8192);
+        const meta = [m.params, m.quant, m.size_gb ? `${m.size_gb} GB` : ''].filter(Boolean).join(' · ');
+        const isAdded = added.has(m.id) || m.already_added;
+        return `<div class="lm-row">`
+          + `<span class="lm-name">${esc(m.id)}</span>`
+          + `<span class="lm-meta">${esc(meta)}</span>`
+          + `<span class="lm-ctx ${bad ? 'bad' : (ctx ? 'ok' : '')}">${esc(ctxLabel)}</span>`
+          + (isAdded ? `<span class="model-flag">added</span><button class="mini-btn lm-test" data-m="${esc(m.id)}">Test</button>`
+                     : `<button class="mini-btn primary lm-add" data-m="${esc(m.id)}" data-ctx="${m.context_chars || ''}">Add</button>`)
+          + `</div>`;
+      }).join('') : `<div class="lm-empty">The server answered but has no models. Pull one first — see below.</div>`;
+    }
+    host.querySelectorAll('.lm-add').forEach(b => b.addEventListener('click', () => addLocalModel(b.dataset.m, +b.dataset.ctx || 0)));
+    host.querySelectorAll('.lm-test').forEach(b => b.addEventListener('click', () => testLocalModel(b.dataset.m, b)));
+  }
+
+  function renderLocalReco() {
+    $('#localReco').innerHTML = (localInfo.recommended || []).map(r =>
+      `<div class="reco-row"><code>ollama pull ${esc(r.name)}</code>`
+      + `<span class="reco-needs">${esc(r.needs)}</span><span class="reco-note">${esc(r.note)}</span>`
+      + `<button class="mini-btn reco-copy" data-cmd="ollama pull ${esc(r.name)}">Copy</button></div>`).join('');
+    $$('#localReco .reco-copy').forEach(b => b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(b.dataset.cmd); b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1500); } catch (e) {}
+    }));
+  }
+
+  async function connectLocal() {
+    const st = $('#localStatus'), url = $('#localUrl').value.trim();
+    if (!url) { st.textContent = 'Enter the server address first.'; st.className = 'tf-status err'; return; }
+    st.textContent = 'Connecting…'; st.className = 'tf-status running';
+    $('#localAdvice').classList.add('hidden');
+    const res = await jget(`/api/settings/local/probe?base_url=${encodeURIComponent(url)}`);
+    if (!res.ok) { localProbe = null; st.textContent = res.error || 'No answer.'; st.className = 'tf-status err'; renderLocalModels(); return; }
+    localProbe = res;
+    const kindName = res.kind === 'ollama' ? `Ollama${res.version ? ' ' + res.version : ''}` : 'an OpenAI-compatible server';
+    st.textContent = `Connected to ${kindName} — ${res.models.length} model(s).`; st.className = 'tf-status ok';
+    localInfo = await jget('/api/settings/local');
+    renderLocalModels();
+    // One warning for the whole listing, when the server's window is known and small.
+    const low = (res.running || []).find(r => r.context && r.context < (localInfo.min_context || 8192));
+    if (low) showLocalAdvice(`${low.id} is loaded with a ${low.context.toLocaleString()}-token context. Raise it in the Ollama app (Settings → Context length) or start the server with OLLAMA_CONTEXT_LENGTH=${localInfo.recommended_context || 16384}.`);
+  }
+  function showLocalAdvice(text) { const a = $('#localAdvice'); a.textContent = text; a.classList.remove('hidden'); }
+
+  async function addLocalModel(name, contextChars) {
+    const st = $('#localStatus');
+    const res = await jsend('/api/settings/models', {
+      id: name, display: name, provider: 'local', model_name: name,
+      max_rounds: 35, max_tokens: 2048, timeout: 600, context_chars: contextChars || 0,
+    });
+    if (res.error) { st.textContent = res.error; st.className = 'tf-status err'; return; }
+    settings.models = res.models; renderModels(); refreshModelSelect();
+    localInfo = await jget('/api/settings/local');
+    renderLocalModels();
+    st.textContent = `Added ${name} — it is in the run selector. Press Test to load it once.`; st.className = 'tf-status ok';
+  }
+
+  async function testLocalModel(name, btn) {
+    const st = $('#localStatus');
+    btn.disabled = true; st.textContent = `Calling ${name}… (the first call loads the model; this can take a minute)`; st.className = 'tf-status running';
+    const res = await jsend('/api/settings/providers/local/test', { model_name: name });
+    btn.disabled = false;
+    if (!res.ok) { st.textContent = res.error || 'Failed.'; st.className = 'tf-status err'; return; }
+    let msg = `Works — ${name} replied "${res.reply}".`;
+    if (res.context_length) msg += ` Loaded with a ${res.context_length.toLocaleString()}-token context.`;
+    st.textContent = msg; st.className = 'tf-status ok';
+    if (res.context_advice) showLocalAdvice(res.context_advice); else $('#localAdvice').classList.add('hidden');
+    if (localProbe) { localProbe.running = [{ id: name, context: res.context_length }]; renderLocalModels(); }
+  }
+  $('#localConnect').addEventListener('click', connectLocal);
+  $('#localUrl').addEventListener('keydown', e => { if (e.key === 'Enter') connectLocal(); });
 
   // ==================================================================
   // Skills — SKILL.md files injected into the agent's system prompt

@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from conftest import PLAN_OK, PLAN_SLOW, GEOJSON
+from conftest import PLAN_OK, PLAN_SLOW, GEOJSON, FakeOllama
 
 selenium = pytest.importorskip("selenium")
 from selenium import webdriver                      # noqa: E402
@@ -109,6 +109,37 @@ def test_run_stop_rejoin_replay(client, stub, browser):
     _wait(lambda: "end of replay" in text().lower(), what="replay")
     assert text().count("Two points saved.") == 2
 
+    errors = [e["message"] for e in d.get_log("browser")
+              if e["level"] == "SEVERE" and "favicon" not in e["message"]]
+    assert errors == [], errors
+
+
+def test_local_models_pane(client, browser, ollama):
+    d = browser
+    d.get(str(client.base_url) + "/")
+    _wait(lambda: d.find_element(By.ID, "catalog"), what="page")
+    # Settings → Local models
+    d.execute_script("document.querySelector('[data-menu=settings] .menu-btn').click()")
+    d.execute_script("document.querySelector('[data-act=set-local]').click()")
+    _wait(lambda: not d.find_element(By.ID, "paneLocal").get_attribute("class").count("hidden"), what="local pane")
+    url = d.find_element(By.ID, "localUrl")
+    url.clear(); url.send_keys(ollama)
+    d.find_element(By.ID, "localConnect").click()
+    _wait(lambda: "Connected to Ollama" in d.find_element(By.ID, "localStatus").text, what="connect")
+    rows = d.find_elements(By.CSS_SELECTOR, "#localModels .lm-row")
+    assert len(rows) == 2
+    assert "Q4_K_M" in rows[0].text and "9 GB" in rows[0].text and "4,096" in rows[0].text
+    # the loaded model has too small a window: the advice is shown
+    _wait(lambda: "OLLAMA_CONTEXT_LENGTH" in d.find_element(By.ID, "localAdvice").text, what="advice")
+    # add the second model and test it
+    d.execute_script("[...document.querySelectorAll('#localModels .lm-add')].pop().click()")
+    _wait(lambda: "Added tiny:latest" in d.find_element(By.ID, "localStatus").text, what="added")
+    FakeOllama.plan = []
+    d.execute_script("[...document.querySelectorAll('#localModels .lm-test')].pop().click()")
+    _wait(lambda: "Works" in d.find_element(By.ID, "localStatus").text, what="test")
+    # the run selector now offers it
+    opts = [o.text for o in d.find_elements(By.CSS_SELECTOR, "#modelSelect option")]
+    assert "tiny:latest" in opts
     errors = [e["message"] for e in d.get_log("browser")
               if e["level"] == "SEVERE" and "favicon" not in e["message"]]
     assert errors == [], errors

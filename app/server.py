@@ -43,7 +43,7 @@ import shutil
 import sys
 from datetime import datetime
 
-APP_VERSION = "2.0.0-beta.1"
+APP_VERSION = "2.0.0-beta.2"
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -54,7 +54,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
-from app import data_profile, journal, paths, reflect, runner
+from app import data_profile, journal, local_models, paths, reflect, runner
 from app.logging_setup import get_app_logger
 from app.settings_store import PROVIDERS, SettingsStore, mask_key, in_container
 from app.skills_store import SkillsStore
@@ -213,7 +213,16 @@ async def api_test_provider(provider_id: str, request: Request):
         # The engines return API failures as text rather than raising.
         if text.startswith("Error"):
             return {"ok": False, "model_name": model_name, "error": text[:400]}
-        return {"ok": True, "model_name": model_name, "reply": text.strip()[:120]}
+        out = {"ok": True, "model_name": model_name, "reply": text.strip()[:120]}
+        if STORE.provider_key_optional(provider_id):
+            # The call just loaded the model, so the server can now say what
+            # context it gave it — the figure that decides whether runs work.
+            base = STORE.provider_base_url(provider_id) or ""
+            ctx = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: local_models.loaded_context(base, model_name))
+            out["context_length"] = ctx
+            out["context_advice"] = local_models.context_advice(ctx, "ollama" if ctx is not None else "")
+        return out
     except Exception as e:
         return {"ok": False, "model_name": model_name, "error": str(e)[:400]}
 
@@ -239,6 +248,8 @@ async def api_upsert_model(request: Request):
         "cost_per_m": [float(body.get("cost_in", 0) or 0), float(body.get("cost_out", 0) or 0)],
         "enabled": bool(body.get("enabled", True)),
     }
+    if body.get("context_chars"):
+        spec["context_chars"] = max(4000, int(body["context_chars"]))
     if body.get("base_url"):
         spec["base_url"] = body["base_url"].strip()
     if not spec["model_name"]:
@@ -328,6 +339,44 @@ def _discover_models(provider_id: str) -> dict:
         "total": len(ids),
         "filtered_out": len(ids) - len(chat),
     }
+
+
+@app.get("/api/settings/local")
+async def api_local_settings():
+    """Everything the Local models pane needs to start from."""
+    return {
+        "presets": local_models.PRESETS,
+        "recommended": local_models.RECOMMENDED,
+        "min_context": local_models.MIN_CONTEXT_TOKENS,
+        "recommended_context": local_models.RECOMMENDED_CONTEXT_TOKENS,
+        "base_url": STORE.provider_base_url("local", raw=True) or "",
+        "models": [m for m in STORE.models_public() if m["provider"] == "local"],
+    }
+
+
+@app.get("/api/settings/local/probe")
+async def api_local_probe(base_url: str = ""):
+    """Ask the server at base_url what it is and what it serves.
+
+    Saves the address as the Local provider's endpoint when it answers, so
+    the models added from the listing run against it.
+    """
+    base = (base_url or "").strip() or STORE.provider_base_url("local", raw=True) or ""
+    if not base:
+        return JSONResponse({"ok": False, "error": "address required"}, status_code=400)
+    # Inside a container localhost is the container; probe where the request would go.
+    from app.settings_store import reachable_base_url
+    res = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: local_models.probe(reachable_base_url(base) or base))
+    if res.get("ok"):
+        STORE.set_provider("local", base_url=base)
+        known = {m["model_name"] for m in STORE.models().values() if m.get("provider") == "local"}
+        for m in res["models"]:
+            m["already_added"] = m["id"] in known
+            m["context_chars"] = local_models.context_chars_for(m.get("context_set") or m.get("context_max"))
+            m["advice"] = local_models.context_advice(m.get("context_set"), res["kind"]) if m.get("context_set") else ""
+        res["base_url"] = base
+    return res
 
 
 @app.get("/api/settings/providers/{provider_id}/available")

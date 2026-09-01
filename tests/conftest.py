@@ -5,10 +5,14 @@ server — projects, upload, run, stream, cancel, Toolbox — is exercised witho
 a network or a key. Set GISCLAW_TEST_SLEEP to make the scripted run linger,
 which the cancel and busy tests rely on.
 """
+import json
 import os
+import socket
 import sys
 import tempfile
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
@@ -136,3 +140,76 @@ def sse_events(resp):
         elif line.startswith("data:"):
             data += line[5:].strip()
     return out
+
+
+# ---------------------------------------------------------------- fake Ollama --
+CONTEXT_LOADED = 4096
+
+
+class FakeOllama(BaseHTTPRequestHandler):
+    plan = []
+
+    def _json(self, obj, code=200):
+        body = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *a):
+        pass
+
+    def do_GET(self):
+        if self.path == "/api/version":
+            return self._json({"version": "0.11.0"})
+        if self.path == "/api/tags":
+            return self._json({"models": [
+                {"name": "qwen2.5-coder:14b", "size": 8_988_000_000,
+                 "details": {"parameter_size": "14.8B", "quantization_level": "Q4_K_M", "family": "qwen2"}},
+                {"name": "tiny:latest", "size": 400_000_000,
+                 "details": {"parameter_size": "0.5B", "quantization_level": "Q8_0", "family": "qwen2"}},
+            ]})
+        if self.path == "/api/ps":
+            return self._json({"models": [{"name": "qwen2.5-coder:14b", "context_length": CONTEXT_LOADED}]})
+        if self.path == "/v1/models":
+            return self._json({"object": "list", "data": [{"id": "qwen2.5-coder:14b"}, {"id": "tiny:latest"}]})
+        self._json({"error": "not found"}, 404)
+
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        body = json.loads(self.rfile.read(n) or b"{}")
+        if self.path == "/api/show":
+            return self._json({"parameters": "num_ctx 32768\nstop \"<|im_end|>\"",
+                               "model_info": {"qwen2.context_length": 32768}})
+        if self.path == "/v1/chat/completions":
+            system = next((m["content"] for m in body.get("messages", []) if m["role"] == "system"), "")
+            if "triage incoming messages" in system:
+                text = '{"mode": "analysis"}'
+            elif "running log" in system:
+                text = "**Result:** fake digest."
+            elif "Reply with the single word" in json.dumps(body):
+                text = "ok"
+            else:
+                text = FakeOllama.plan.pop(0) if FakeOllama.plan else \
+                    'Thought: done\nAction: finish\nArgs: {"summary": "Finished."}'
+            return self._json({
+                "id": "x", "object": "chat.completion", "model": body.get("model"),
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": text},
+                             "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 50, "completion_tokens": 10, "total_tokens": 60},
+            })
+        self._json({"error": "not found"}, 404)
+
+
+@pytest.fixture(scope="session")
+def ollama():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    srv = HTTPServer(("127.0.0.1", port), FakeOllama)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{port}/v1"
+    srv.shutdown()
+
+

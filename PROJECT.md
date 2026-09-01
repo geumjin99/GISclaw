@@ -68,6 +68,6 @@
 - [ ] E1 第一步：抽取 `index.html` 与 `app.js` 的界面字符串为 `app/web/i18n/en.json`，再生成 zh / ko
 - [x] E4：DISCLAIMER 加「原生模式没有容器隔离」（README 英文段已加；中 / 韩段随 v2 文档更新）
 - [x] 验证 wheel 路线：Linux 上 `install.sh` → 715 MB venv，测试套件全过（2026-09-01）
-- [ ] mac 实机：`bash install.sh` → 双击 `GISclaw.app`；看窗口是否出现、CJK 图标签、示例项目跑通
+- [ ] mac 实机：装 Release 里的 `.dmg`；看窗口是否出现、CJK 图标签、示例项目跑通、Local models 面板连本机 Ollama
 - [ ] Windows 实机或 Actions：`install.ps1` 未测
 - [ ] 三语 PDF 手册补「本地模型」一节

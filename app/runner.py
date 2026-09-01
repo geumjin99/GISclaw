@@ -83,7 +83,7 @@ Args: <arguments as JSON object>
 9. After saving, verify: print(os.listdir('pred_results/'))
 
 ## Available Packages (these are installed; nothing else is)
-geopandas, rasterio, shapely, fiona, pyproj, rtree, numpy, pandas, scipy,
+geopandas, rasterio, shapely, pyogrio, pyproj, rtree, numpy, pandas, scipy,
 matplotlib, seaborn, sklearn, libpysal, esda, momepy, rasterstats, mapclassify,
 networkx, osmnx, h3, openpyxl
 {skills_block}{catalog_block}{data_block}{memory_block}{context_block}"""

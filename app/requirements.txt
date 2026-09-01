@@ -5,7 +5,7 @@
 
 # --- Web server ---
 fastapi>=0.110
-uvicorn[standard]>=0.29
+uvicorn>=0.29
 sse-starlette>=1.8
 
 # --- Cloud LLM SDKs (single-agent product uses cloud models only) ---

@@ -26,13 +26,23 @@ $py = "$out\GISclaw\python\python.exe"
 
 Write-Host "== Packages"
 uv pip install --python $py --break-system-packages -r desktop\requirements-desktop.txt
-& $py -c "import geopandas, rasterio, pyproj, fiona, shapely, fastapi, webview; print('imports ok')"
+& $py -c "import geopandas, rasterio, pyproj, pyogrio, shapely, fastapi, webview; print('imports ok')"
 
 Write-Host "== Application files"
 foreach ($d in "app", "src", "desktop", "examples") { Copy-Item -Recurse $d "$out\GISclaw\gisclaw\$d" }
 foreach ($f in "LICENSE", "COPYRIGHT", "DISCLAIMER.md", "THIRD_PARTY_NOTICES.md", "README.md", "CHANGELOG.md") { Copy-Item $f "$out\GISclaw\gisclaw\" }
 Get-ChildItem -Recurse -Directory -Filter __pycache__ "$out\GISclaw\gisclaw" | Remove-Item -Recurse -Force
 Remove-Item "$out\GISclaw\gisclaw\app\server.log" -ErrorAction SilentlyContinue
+
+Write-Host "== Trim what the application never uses"
+$pyd = "$out\GISclaw\python"
+foreach ($d in "Lib\test", "Lib\idlelib", "Lib\tkinter", "Lib\turtledemo", "Lib\ensurepip", "Lib\site-packages\pip", "Lib\site-packages\setuptools", "Lib\site-packages\selenium", "Doc", "tcl") {
+  if (Test-Path "$pyd\$d") { Remove-Item -Recurse -Force "$pyd\$d" }
+}
+Get-ChildItem -Recurse -Directory -Filter __pycache__ $pyd | Remove-Item -Recurse -Force
+Get-ChildItem "$pyd\DLLs" -Filter "_tkinter*" -ErrorAction SilentlyContinue | Remove-Item -Force
+Get-ChildItem "$pyd\DLLs" -Filter "tcl*" -ErrorAction SilentlyContinue | Remove-Item -Force
+Get-ChildItem "$pyd\DLLs" -Filter "tk*" -ErrorAction SilentlyContinue | Remove-Item -Force
 
 Write-Host "== Installer"
 $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"

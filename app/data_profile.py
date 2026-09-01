@@ -56,9 +56,8 @@ def _profile_vector(path: str) -> dict:
     import geopandas as gpd
     gdf = gpd.read_file(path, rows=1)          # schema only — don't read the body
     try:
-        import fiona
-        with fiona.open(path) as src:
-            count = len(src)
+        import pyogrio
+        count = pyogrio.read_info(path).get("features")
     except Exception:
         count = None
     fields = [c for c in gdf.columns if c != "geometry"][:MAX_FIELDS]
