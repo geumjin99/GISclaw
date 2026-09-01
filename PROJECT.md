@@ -34,7 +34,7 @@
 | E0 | 发版基础：tag `v1.0.0`、GitHub Release、`CHANGELOG.md`、`/api/version` 与 About 显示版本 | ✅ 2026-09-01 |
 | E1 | 三语界面（en / zh / ko）：静态字典 + `data-i18n`、语言设置持久化、后端消息「码 + 参数」、agent 收尾 / LOG 跟随界面语言 | ⬜ ADR-002 |
 | E2 | 无 Docker 安装：`install.sh` / `install.ps1` 用 uv 建 Python 3.11 环境（PyPI 二进制 wheel），`desktop/launcher.py` 开原生窗口，macOS 生成 `GISclaw.app` | 🟡 Linux 上验证通过（全测试套件）；mac / Windows 待实机 |
-| E3 | 原生安装包：python-build-standalone 环境 + pywebview 窗口（同一份 Web 前端，Win 用 WebView2 / mac 用 WKWebView）+ Inno Setup / create-dmg；GitHub Actions 矩阵出包 | ⬜ ADR-003 |
+| E3 | **原生安装包**：uv 管理的可搬迁 Python + 全部 wheel 装进包内 + pywebview 窗口；macOS `.app` + `.dmg`（ad-hoc 签名），Windows Inno Setup `.exe`；`.github/workflows/desktop.yml` 出包并发 Release | 🟡 脚本在 Linux 上 dry-run 通过；等 Actions 实跑 + 实机 |
 | E4 | 原生模式的安全边界：DISCLAIMER 与 README 说明「原生模式没有容器隔离」；沙箱工作目录限定、UI 提示 | 🟡 文档已加（英文）；限定与提示待做 |
 | E5 | 开发环境统一：以本仓库为唯一开发树 | ⬜ B1 |
 | E6 | 其余待办：run 历史浏览、报告导出（HTML / PDF）、大矢量切片、更多算子、`code.py` 收录失败片段、discipline 补随机种子 / 空值纪律 | ⬜ 按需 |

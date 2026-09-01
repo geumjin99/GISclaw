@@ -45,3 +45,6 @@ docs/07_lessons/
 gisclaw
 GISclaw.cmd
 GISclaw.app/
+
+# Packaged builds
+build/

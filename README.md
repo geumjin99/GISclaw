@@ -93,14 +93,19 @@ less reliably than the hosted flagships, so read their work closely.
 
 Then create a project, attach your data, and type what you want.
 
-**Without Docker (beta).** On macOS or Linux, `bash install.sh` sets up a
-private Python environment beside the source and, on macOS, a `GISclaw.app`
-you can double-click; on Windows, `powershell -ExecutionPolicy Bypass -File
-install.ps1` does the same and puts a shortcut on the Desktop. GISclaw then
-opens in its own window, and your work lives in the user data folder
-(`~/Library/Application Support/GISclaw`, `%LOCALAPPDATA%\GISclaw`,
-`~/.local/share/GISclaw`). Installed this way the model's code runs with your
-own permissions — read the note in [`DISCLAIMER.md`](DISCLAIMER.md).
+**Desktop application (beta), no Docker.** Download the build for your
+system from the Releases page — a `.dmg` for macOS (Apple Silicon), a setup
+`.exe` for Windows — and install it like any other program. It opens in its
+own window; your work lives in the user data folder
+(`~/Library/Application Support/GISclaw`, `%LOCALAPPDATA%\GISclaw`). The
+builds are not signed with a developer certificate: on macOS, open the app the
+first time with right-click → Open, or on macOS 15 allow it under System
+Settings → Privacy & Security → Open Anyway; on Windows, if SmartScreen
+appears, choose More info → Run anyway. From source, `bash install.sh`
+(macOS, Linux) or `powershell -ExecutionPolicy Bypass -File install.ps1`
+(Windows) builds the same thing beside the checkout. Installed this way the
+model's code runs with your own permissions — read the note in
+[`DISCLAIMER.md`](DISCLAIMER.md).
 
 Your work — projects, outputs, run history, and the keys you entered — is kept
 in `projects/` beside the compose file, as ordinary files on your disk. That is

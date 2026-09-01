@@ -136,6 +136,10 @@ def main() -> int:
 
     data = os.path.abspath(os.path.expanduser(args.data)) if args.data else data_dir()
     prepare_environment(data)
+    if sys.stdout is None or sys.stderr is None:
+        # Started without a console (pythonw.exe, a double-clicked bundle):
+        # keep what would have been printed, in the data folder.
+        sys.stdout = sys.stderr = open(os.path.join(data, "launcher.log"), "a", encoding="utf-8")
     port = args.port or free_port()
     server = start_server(port)
     url = f"http://127.0.0.1:{port}/"
