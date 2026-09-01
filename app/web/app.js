@@ -158,9 +158,36 @@
   const map = L.map('mapLeaflet', { zoomControl: false, attributionControl: true }).setView([20, 0], 2);
   // Leaflet 1.9's default attribution prefix embeds a Ukrainian flag SVG — replace it with a plain link.
   map.attributionControl.setPrefix('<a href="https://leafletjs.com" title="A JavaScript library for interactive maps">Leaflet</a>');
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OSM &copy; CARTO', subdomains: 'abcd', maxZoom: 19,
-  }).addTo(map);
+  // Underneath everything: land, lakes and borders from a built-in file, so
+  // the map is never blank — not offline, not behind a blocked provider.
+  map.createPane('offline').style.zIndex = 150;
+  const NE = 'vendor/naturalearth/';
+  const neStyle = {
+    ne_110m_land: { color: '#cfd4d8', weight: 0.6, fillColor: '#eeece6', fillOpacity: 1 },
+    ne_110m_lakes: { color: '#cfd9e2', weight: 0.5, fillColor: '#dde7ee', fillOpacity: 1 },
+    ne_110m_admin_0_boundary_lines_land: { color: '#b9bfc6', weight: 0.6, dashArray: '2 3' },
+  };
+  Object.entries(neStyle).forEach(([name, style]) => {
+    fetch(`${NE}${name}.geojson`).then(r => r.json())
+      .then(gj => L.geoJSON(gj, { pane: 'offline', style: () => style, interactive: false }).addTo(map))
+      .catch(() => {});
+  });
+
+  // The basemap: tiles served by GISclaw (see app/basemap.py).
+  let baseLayer = null;
+  let basemapInfo = null;
+  function applyBasemap(cfg) {
+    basemapInfo = cfg;
+    if (baseLayer) { map.removeLayer(baseLayer); baseLayer = null; }
+    if (cfg && cfg.tiles && cfg.ready) {
+      baseLayer = L.tileLayer(`/api/basemap/tile/{z}/{x}/{y}?r={r}&v=${cfg.version}`, {
+        attribution: esc(cfg.attribution || ''), maxZoom: cfg.max_zoom || 19, maxNativeZoom: cfg.max_zoom || 19,
+        errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+      }).addTo(map);
+    }
+    renderLegend();
+  }
+  fetch('/api/settings/basemap').then(r => r.json()).then(applyBasemap).catch(() => applyBasemap(null));
 
   const LAYER_COLORS = ['#2f6f9f', '#B14B26', '#3f7d58', '#8a5fb0', '#b0892f', '#4a7a8c'];
   const shownLayers = {};   // name -> { layer, color }
@@ -249,7 +276,8 @@
     host.innerHTML = '';
     const base = document.createElement('div');
     base.className = 'legend-layer';
-    base.innerHTML = `<div class="legend-layer-head"><span class="legend-layer-name">Basemap</span><span class="legend-layer-meta">OSM</span></div>`;
+    const bmName = basemapInfo ? (basemapInfo.tiles && basemapInfo.ready ? basemapInfo.display : 'offline reference') : '…';
+    base.innerHTML = `<div class="legend-layer-head"><span class="legend-layer-name">Basemap</span><span class="legend-layer-meta">${esc(bmName)}</span></div>`;
     host.appendChild(base);
 
     const entries = Object.entries(shownLayers);
@@ -1719,7 +1747,9 @@
     $('#paneKeys').classList.toggle('hidden', name !== 'keys');
     $('#paneModels').classList.toggle('hidden', name !== 'models');
     $('#paneLocal').classList.toggle('hidden', name !== 'local');
+    $('#paneMap').classList.toggle('hidden', name !== 'map');
     if (name === 'local') loadLocal();
+    if (name === 'map') loadBasemapPane();
     $('#paneSkills').classList.toggle('hidden', name !== 'skills');
     $('#paneMemory').classList.toggle('hidden', name !== 'memory');
   }
@@ -1998,6 +2028,51 @@
   }
   $('#localConnect').addEventListener('click', connectLocal);
   $('#localUrl').addEventListener('keydown', e => { if (e.key === 'Enter') connectLocal(); });
+
+  // ==================================================================
+  // Map pane — which tiles, with what key, from where
+  // ==================================================================
+  let bmCfg = null;
+  function bmRows() {
+    const sel = $('#bmProvider').value;
+    const p = (bmCfg.providers || []).find(x => x.id === sel) || {};
+    $('#bmKeyRow').style.display = (p.needs_key || sel === 'custom') ? '' : 'none';
+    $('#bmUrlRow').style.display = sel === 'custom' ? '' : 'none';
+    $('#bmAttrRow').style.display = (sel === 'custom' || sel === 'mbtiles') ? '' : 'none';
+    $('#bmFileRow').style.display = sel === 'mbtiles' ? '' : 'none';
+    $('#bmHint').textContent = p.hint || '';
+    const docs = $('#bmDocs'); docs.hidden = !p.docs; if (p.docs) docs.href = p.docs;
+  }
+  async function loadBasemapPane() {
+    bmCfg = await jget('/api/settings/basemap');
+    const sel = $('#bmProvider');
+    sel.innerHTML = bmCfg.providers.map(p => `<option value="${esc(p.id)}">${esc(p.display)}</option>`).join('');
+    sel.value = bmCfg.provider;
+    $('#bmKey').value = ''; $('#bmKey').placeholder = bmCfg.masked_key ? `${bmCfg.masked_key}  (stored — type to replace)` : "paste the provider's key";
+    $('#bmUrl').value = bmCfg.url || ''; $('#bmAttr').value = bmCfg.attribution || ''; $('#bmFile').value = bmCfg.mbtiles || '';
+    $('#bmCache').checked = bmCfg.cache !== false;
+    bmRows();
+    const mb = (bmCfg.cache_bytes || 0) / 1048576;
+    $('#bmStatus').textContent = (bmCfg.ready ? '' : bmCfg.problem + ' ') + `Cache: ${mb.toFixed(1)} MB.`;
+    $('#bmStatus').className = 'tf-status' + (bmCfg.ready ? '' : ' err');
+  }
+  $('#bmProvider').addEventListener('change', bmRows);
+  $('#bmSave').addEventListener('click', async () => {
+    const st = $('#bmStatus');
+    const body = { provider: $('#bmProvider').value, url: $('#bmUrl').value, attribution: $('#bmAttr').value,
+                   mbtiles: $('#bmFile').value, cache: $('#bmCache').checked };
+    if ($('#bmKey').value.trim()) body.key = $('#bmKey').value.trim();
+    const res = await jsend('/api/settings/basemap', body);
+    if (res.error) { st.textContent = res.error; st.className = 'tf-status err'; return; }
+    bmCfg = res; $('#bmKey').value = '';
+    applyBasemap(res);
+    st.textContent = res.ready ? `Applied — ${res.display}.` : res.problem;
+    st.className = 'tf-status ' + (res.ready ? 'ok' : 'err');
+  });
+  $('#bmClear').addEventListener('click', async () => {
+    await jpost('/api/settings/basemap/clear_cache', {});
+    $('#bmStatus').textContent = 'Tile cache cleared.'; $('#bmStatus').className = 'tf-status ok';
+  });
 
   // ==================================================================
   // Skills — SKILL.md files injected into the agent's system prompt

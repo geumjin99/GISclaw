@@ -18,6 +18,7 @@ The paper's reference implementation stays on the `paper-v2` branch (tag `v2-gsi
 - Desktop application (beta): a `.dmg` for macOS and a setup `.exe` for Windows, built by `desktop/build_*`; `install.sh` / `install.ps1` build the same from source. Native window, data in the user data folder.
 - Settings → Local models: pick Ollama, LM Studio or vLLM, connect, see each model's size, quantisation and context length, add it, and test it; the loaded context length is reported and a too-small one explained. Local models get their own defaults (longer timeout, transcript sized to the window).
 - Smaller desktop builds: one GDAL instead of two (fiona dropped in favour of pyogrio), no uvloop, the interpreter's test suite and Tk removed.
+- Settings → Map: choose the basemap — CARTO or OpenStreetMap without a key, MapTiler / Mapbox / Thunderforest with one, any XYZ template of your own, an MBTiles file for fully offline use, or none. Tiles are fetched by GISclaw and cached in the data folder, so a key never reaches the page and viewed areas stay available offline. A built-in Natural Earth layer (land, lakes, borders) is always drawn underneath.
 
 ## 1.0.0 — 2026-09-01
 

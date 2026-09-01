@@ -88,3 +88,9 @@ GISclaw calls hosted large language models (OpenAI, Anthropic, DeepSeek,
 Google, or any OpenAI-compatible endpoint you configure). No model weights are
 bundled. Your use of those services is governed by each provider's own terms,
 and **you supply your own API keys** — none ship with this software.
+
+## Natural Earth
+
+`app/web/vendor/naturalearth/` holds the 1:110m land, lakes and boundary
+layers from Natural Earth (naturalearthdata.com), used as the offline reference
+map. Natural Earth is in the public domain; no attribution is required.

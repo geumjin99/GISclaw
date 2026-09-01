@@ -43,7 +43,7 @@ import shutil
 import sys
 from datetime import datetime
 
-APP_VERSION = "2.0.0-beta.2"
+APP_VERSION = "2.0.0-beta.3"
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -54,7 +54,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
-from app import data_profile, journal, local_models, paths, reflect, runner
+from app import basemap, data_profile, journal, local_models, paths, reflect, runner
 from app.logging_setup import get_app_logger
 from app.settings_store import PROVIDERS, SettingsStore, mask_key, in_container
 from app.skills_store import SkillsStore
@@ -339,6 +339,47 @@ def _discover_models(provider_id: str) -> dict:
         "total": len(ids),
         "filtered_out": len(ids) - len(chat),
     }
+
+
+# ---------------------------------------------------------------- basemap --
+@app.get("/api/settings/basemap")
+async def api_basemap_settings():
+    out = basemap.public(STORE)
+    out["cache_bytes"] = basemap.cache_size(STORE)
+    return out
+
+
+@app.post("/api/settings/basemap")
+async def api_set_basemap(request: Request):
+    body = await request.json()
+    try:
+        basemap.save(STORE, body)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    log.info(f"basemap: {basemap.settings(STORE)['provider']}")
+    out = basemap.public(STORE)
+    out["cache_bytes"] = basemap.cache_size(STORE)
+    return out
+
+
+@app.post("/api/settings/basemap/clear_cache")
+async def api_clear_tile_cache():
+    basemap.clear_cache(STORE)
+    return {"ok": True, "cache_bytes": 0}
+
+
+@app.get("/api/basemap/tile/{z}/{x}/{y}")
+async def api_basemap_tile(z: int, x: int, y: int, r: str = ""):
+    """One map tile, from the cache, the provider, or the MBTiles file."""
+    res, err = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: basemap.tile(STORE, z, x, y, r))
+    if res is None:
+        # A transparent answer, not an error page: the map shows the offline
+        # reference layer underneath and moves on.
+        return Response(status_code=204, headers={"X-Tile-Error": err[:120]})
+    data, ctype = res
+    return Response(content=data, media_type=ctype,
+                    headers={"Cache-Control": "private, max-age=86400"})
 
 
 @app.get("/api/settings/local")

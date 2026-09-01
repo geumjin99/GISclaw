@@ -71,6 +71,7 @@
           <div class="menu-item" data-act="set-keys">API keys…</div>
           <div class="menu-item" data-act="set-models">Models…</div>
           <div class="menu-item" data-act="set-local">Local models…</div>
+          <div class="menu-item" data-act="set-map">Map…</div>
           <div class="menu-item" data-act="set-skills">Skills…</div>
           <div class="menu-item" data-act="set-memory">Memory…</div>
         </div>
@@ -382,6 +383,7 @@
         <button class="set-tab active" data-pane="keys">API keys</button>
         <button class="set-tab" data-pane="models">Models</button>
         <button class="set-tab" data-pane="local">Local models</button>
+        <button class="set-tab" data-pane="map">Map</button>
         <button class="set-tab" data-pane="skills">Skills</button>
         <button class="set-tab" data-pane="memory">Memory</button>
       </div>
@@ -455,6 +457,40 @@
         <div class="local-models" id="localModels"></div>
         <div class="ma-title">Recommended models</div>
         <div class="local-reco" id="localReco"></div>
+      </div>
+
+      <div class="set-pane hidden" id="paneMap">
+        <div class="modal-sub">
+          The map behind your data. Tiles are fetched by GISclaw, not by this page — a key stays
+          on this computer, and every tile you have looked at is kept in the data folder, so the
+          area stays available offline. Continents, borders and lakes are always drawn from a
+          built-in offline layer, whatever else loads.
+        </div>
+        <div class="ma-grid">
+          <label>Source<select class="model-select" id="bmProvider"></select></label>
+          <label id="bmKeyRow">Key
+            <input class="text-input" id="bmKey" type="password" autocomplete="off" spellcheck="false" placeholder="paste the provider's key" />
+          </label>
+          <label id="bmUrlRow">Tile template
+            <input class="text-input" id="bmUrl" spellcheck="false" placeholder="https://host/{z}/{x}/{y}.png?key={key}" />
+          </label>
+          <label id="bmAttrRow">Attribution
+            <input class="text-input" id="bmAttr" placeholder="© whoever made the map" />
+          </label>
+          <label id="bmFileRow">MBTiles file
+            <input class="text-input" id="bmFile" spellcheck="false" placeholder="/path/to/basemap.mbtiles" />
+          </label>
+        </div>
+        <div class="prov-hint" id="bmHint"></div>
+        <a class="prov-docs" id="bmDocs" target="_blank" rel="noopener" hidden>get a key ↗</a>
+        <label class="mem-toggle"><input type="checkbox" id="bmCache" checked />
+          <span>Keep the tiles I have looked at, for offline use</span></label>
+        <div class="ma-actions">
+          <span class="tf-status" id="bmStatus"></span>
+          <span class="ca-spacer"></span>
+          <button class="reset-btn" id="bmClear"><span>Clear tile cache</span></button>
+          <button class="primary-btn" id="bmSave"><span>Apply</span></button>
+        </div>
       </div>
 
       <div class="set-pane hidden" id="paneSkills">

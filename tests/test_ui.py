@@ -143,3 +143,26 @@ def test_local_models_pane(client, browser, ollama):
     errors = [e["message"] for e in d.get_log("browser")
               if e["level"] == "SEVERE" and "favicon" not in e["message"]]
     assert errors == [], errors
+
+
+def test_map_pane(client, browser):
+    d = browser
+    d.get(str(client.base_url) + "/")
+    _wait(lambda: d.find_element(By.ID, "catalog"), what="page")
+    # the offline reference layer is drawn regardless of any provider
+    _wait(lambda: d.execute_script("return document.querySelectorAll('.leaflet-offline-pane path').length") > 100, what="offline layer")
+    d.execute_script("document.querySelector('[data-menu=settings] .menu-btn').click()")
+    d.execute_script("document.querySelector('[data-act=set-map]').click()")
+    _wait(lambda: not d.find_element(By.ID, "paneMap").get_attribute("class").count("hidden"), what="map pane")
+    _wait(lambda: d.find_element(By.ID, "bmProvider").get_attribute("value") != "", what="providers loaded")
+    d.execute_script("const s = document.getElementById('bmProvider'); s.value = 'none'; s.dispatchEvent(new Event('change'))")
+    d.find_element(By.ID, "bmSave").click()
+    _wait(lambda: "Applied" in d.find_element(By.ID, "bmStatus").text, what="applied")
+    assert "offline reference" in d.find_element(By.ID, "legendLayers").text
+    assert d.execute_script("return document.querySelectorAll('.leaflet-tile-pane img').length") == 0
+    d.execute_script("const s = document.getElementById('bmProvider'); s.value = 'carto-light'; s.dispatchEvent(new Event('change'))")
+    d.find_element(By.ID, "bmSave").click()
+    _wait(lambda: "CARTO Light" in d.find_element(By.ID, "bmStatus").text, what="carto back")
+    errors = [e["message"] for e in d.get_log("browser")
+              if e["level"] == "SEVERE" and "favicon" not in e["message"]]
+    assert errors == [], errors
