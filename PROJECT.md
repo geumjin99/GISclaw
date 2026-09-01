@@ -33,9 +33,9 @@
 |---|---|---|
 | E0 | 发版基础：tag `v1.0.0`、GitHub Release、`CHANGELOG.md`、`/api/version` 与 About 显示版本 | ✅ 2026-09-01 |
 | E1 | 三语界面（en / zh / ko）：静态字典 + `data-i18n`、语言设置持久化、后端消息「码 + 参数」、agent 收尾 / LOG 跟随界面语言 | ⬜ ADR-002 |
-| E2 | 无 Docker 安装：`install.sh` / `install.ps1` 用 uv 建 Python 3.11 环境（PyPI 二进制 wheel），`gisclaw` 启动器打开浏览器 | ⬜ |
+| E2 | 无 Docker 安装：`install.sh` / `install.ps1` 用 uv 建 Python 3.11 环境（PyPI 二进制 wheel），`desktop/launcher.py` 开原生窗口，macOS 生成 `GISclaw.app` | 🟡 Linux 上验证通过（全测试套件）；mac / Windows 待实机 |
 | E3 | 原生安装包：python-build-standalone 环境 + pywebview 窗口（同一份 Web 前端，Win 用 WebView2 / mac 用 WKWebView）+ Inno Setup / create-dmg；GitHub Actions 矩阵出包 | ⬜ ADR-003 |
-| E4 | 原生模式的安全边界：沙箱工作目录限定、UI 提示、DISCLAIMER 补「原生模式没有容器隔离」 | ⬜ E2 前置 |
+| E4 | 原生模式的安全边界：DISCLAIMER 与 README 说明「原生模式没有容器隔离」；沙箱工作目录限定、UI 提示 | 🟡 文档已加（英文）；限定与提示待做 |
 | E5 | 开发环境统一：以本仓库为唯一开发树 | ⬜ B1 |
 | E6 | 其余待办：run 历史浏览、报告导出（HTML / PDF）、大矢量切片、更多算子、`code.py` 收录失败片段、discipline 补随机种子 / 空值纪律 | ⬜ 按需 |
 | E7 | **代码审视与加固**（v2 开工前）：Stop 真正停止、刷新后重连、单 run 互斥、沙箱超时/取消、只绑本机 + 同页校验、Toolbox 进记录、缓存计费、上下文上限随模型、Windows junction、前端修补、测试套件 | ✅ 2026-09-01（`v2` 分支） |
@@ -66,6 +66,8 @@
 - [ ] 决定 B1；`release` 只接 v1.0.x 修复
 - [ ] 确认 ADR-002 / ADR-003，状态改「决定」
 - [ ] E1 第一步：抽取 `index.html` 与 `app.js` 的界面字符串为 `app/web/i18n/en.json`，再生成 zh / ko
-- [ ] E4：DISCLAIMER 与 README 三语补「原生模式没有容器隔离」
-- [ ] 验证 wheel 路线：干净 mac 上 `uv venv` + `uv pip install geopandas rasterio fiona pyproj shapely rtree`
+- [x] E4：DISCLAIMER 加「原生模式没有容器隔离」（README 英文段已加；中 / 韩段随 v2 文档更新）
+- [x] 验证 wheel 路线：Linux 上 `install.sh` → 715 MB venv，测试套件全过（2026-09-01）
+- [ ] mac 实机：`bash install.sh` → 双击 `GISclaw.app`；看窗口是否出现、CJK 图标签、示例项目跑通
+- [ ] Windows 实机或 Actions：`install.ps1` 未测
 - [ ] 三语 PDF 手册补「本地模型」一节
