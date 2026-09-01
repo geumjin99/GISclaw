@@ -140,3 +140,19 @@ def test_settings_mask_keys(client):
     assert "abcdefghijkl" not in json.dumps(provs)
     st = os.stat(os.path.join(os.environ["GISCLAW_WORKSPACE"], ".gisclaw", "settings.json"))
     assert oct(st.st_mode & 0o777) == "0o600"
+
+
+def test_cross_site_requests_are_refused(client):
+    import httpx
+    base = str(client.base_url)
+    with httpx.Client(base_url=base) as bare:          # no client header
+        r = bare.post("/api/projects", json={"name": "x"})
+        assert r.status_code == 403
+        r = bare.get("/api/projects")                    # reads are fine
+        assert r.status_code == 200
+    r = client.post("/api/projects", json={"name": "x"},
+                    headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403
+    r = client.post("/api/projects", json={"name": "Same Origin"},
+                    headers={"Origin": base.rstrip("/")})
+    assert r.status_code == 200

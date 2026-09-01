@@ -255,11 +255,14 @@ class SettingsStore:
     def save(self, data: dict):
         data["version"] = SETTINGS_VERSION
         tmp = self.path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
+        # Created private from the first byte — it holds plaintext API keys,
+        # and a chmod afterwards would leave a moment where it is not.
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.replace(tmp, self.path)
         try:
-            os.chmod(self.path, 0o600)   # it holds plaintext API keys
+            os.chmod(self.path, 0o600)
         except OSError:
             pass
 

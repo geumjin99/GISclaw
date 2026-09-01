@@ -96,6 +96,28 @@ RECORD_FILES = paths.RECORD_FILES
 # ============================================================
 app = FastAPI(title="GISclaw", description="GIS Analyst Agent (product)", version=APP_VERSION)
 
+# The server listens on localhost, and anything on localhost is reachable from
+# any web page the user happens to have open: a page elsewhere could POST to
+# /api/run and have the model execute code on this machine with the user's own
+# keys. Two checks close that. Every state-changing request must carry a header
+# that only this front-end sends — a cross-site page cannot add it without a
+# CORS preflight, which is never answered — and, when the browser names an
+# origin, it has to be this server.
+CLIENT_HEADER = "x-gisclaw"
+
+
+@app.middleware("http")
+async def _same_client_only(request: Request, call_next):
+    if request.url.path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS"):
+        if request.headers.get(CLIENT_HEADER) != "1":
+            return JSONResponse({"error": "missing client header"}, status_code=403)
+        origin = request.headers.get("origin")
+        if origin:
+            from urllib.parse import urlsplit
+            if urlsplit(origin).netloc.lower() != (request.headers.get("host") or "").lower():
+                return JSONResponse({"error": "cross-site request refused"}, status_code=403)
+    return await call_next(request)
+
 
 @app.get("/api/models")
 async def api_models(all: int = 0):

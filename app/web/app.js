@@ -25,7 +25,20 @@
   const $  = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+  // Every call to the API carries a header only this page sends; the server
+  // refuses state changes without it (see server.py). Done once, here, so no
+  // individual request can forget.
+  const _fetch = window.fetch.bind(window);
+  window.fetch = (url, opts) => {
+    if (typeof url === 'string' && url.startsWith('/api/')) {
+      opts = Object.assign({}, opts || {});
+      opts.headers = Object.assign({}, opts.headers || {}, { 'X-GISclaw': '1' });
+    }
+    return _fetch(url, opts);
+  };
 
   // Inline Lucide (ISC) line-icons — monochrome, inherit currentColor, CSP-safe.
   const LUCIDE = {

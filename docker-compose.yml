@@ -25,7 +25,11 @@ services:
     image: gisclaw:latest
     container_name: gisclaw_app
     ports:
-      - "8765:8765"
+      # Published to this machine only. The interface can run any code the
+      # model writes and holds your API keys, so it is not for the whole
+      # network. To reach it from another device, change this to "8765:8765"
+      # knowingly.
+      - "127.0.0.1:8765:8765"
     env_file:
       # Genuinely optional. Requires Docker Compose 2.24 or newer; on older
       # versions this entry still demands the file, so create an empty .env.

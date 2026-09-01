@@ -89,7 +89,8 @@ def client():
             break
         time.sleep(0.05)
     assert srv.started, "test server did not start"
-    with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=120) as c:
+    with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=120,
+                      headers={"X-GISclaw": "1"}) as c:
         yield c
     srv.should_exit = True
     thread.join(timeout=5)
