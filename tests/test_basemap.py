@@ -41,9 +41,9 @@ def tiles():
 
 def test_default_and_providers(client):
     cfg = client.get("/api/settings/basemap").json()
-    assert cfg["provider"] == "carto-light" and cfg["tiles"] and cfg["ready"]
+    assert cfg["provider"] == "esri-gray" and cfg["tiles"] and cfg["ready"]
     ids = {p["id"] for p in cfg["providers"]}
-    assert {"osm", "maptiler", "mapbox", "custom", "mbtiles", "none"} <= ids
+    assert {"esri-gray", "esri-imagery", "osm", "maptiler", "mapbox", "custom", "mbtiles", "none"} <= ids
 
 
 def test_custom_provider_key_proxy_and_cache(client, tiles):
@@ -89,4 +89,4 @@ def test_none_and_out_of_range(client):
     assert client.get("/api/basemap/tile/2/1/2").status_code == 204
     client.post("/api/settings/basemap", json={"provider": "osm"})
     assert client.get("/api/basemap/tile/2/9/9").status_code == 204   # x,y beyond 2^z
-    client.post("/api/settings/basemap", json={"provider": "carto-light"})
+    client.post("/api/settings/basemap", json={"provider": "esri-gray"})

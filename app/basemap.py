@@ -30,22 +30,33 @@ import urllib.error
 import urllib.request
 
 PROVIDERS = {
-    "carto-light": {
-        "display": "CARTO Light (no key)", "key": False,
-        "url": "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", "sub": "abcd",
-        "attribution": "© OpenStreetMap contributors © CARTO", "max_zoom": 19},
-    "carto-dark": {
-        "display": "CARTO Dark (no key)", "key": False,
-        "url": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", "sub": "abcd",
-        "attribution": "© OpenStreetMap contributors © CARTO", "max_zoom": 19},
-    "carto-voyager": {
-        "display": "CARTO Voyager (no key)", "key": False,
-        "url": "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", "sub": "abcd",
-        "attribution": "© OpenStreetMap contributors © CARTO", "max_zoom": 19},
+    # Esri's classic tile services are served without a key, with attribution.
+    "esri-gray": {
+        "display": "Esri Light Gray (no key)", "key": False,
+        "url": "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+        "attribution": "Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors", "max_zoom": 16},
+    "esri-street": {
+        "display": "Esri Street Map (no key)", "key": False,
+        "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+        "attribution": "Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors", "max_zoom": 19},
+    "esri-topo": {
+        "display": "Esri Topographic (no key)", "key": False,
+        "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        "attribution": "Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors", "max_zoom": 19},
+    "esri-imagery": {
+        "display": "Esri World Imagery (no key)", "key": False,
+        "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        "attribution": "Tiles © Esri — Esri, Maxar, Earthstar Geographics, and the GIS User Community", "max_zoom": 19},
+    "opentopomap": {
+        "display": "OpenTopoMap (no key)", "key": False,
+        "url": "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", "sub": "abc",
+        "attribution": "© OpenStreetMap contributors, SRTM · © OpenTopoMap (CC-BY-SA)", "max_zoom": 17},
     "osm": {
-        "display": "OpenStreetMap (no key)", "key": False,
+        "display": "OpenStreetMap (no key · light use only)", "key": False,
         "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "attribution": "© OpenStreetMap contributors", "max_zoom": 19},
+        "attribution": "© OpenStreetMap contributors", "max_zoom": 19,
+        "hint": "The OpenStreetMap Foundation's own tile servers are for light, occasional use; "
+                "for regular work use another source or an MBTiles file."},
     "maptiler": {
         "display": "MapTiler (key)", "key": True, "docs": "https://cloud.maptiler.com/account/keys/",
         "url": "https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key={key}",
@@ -61,8 +72,8 @@ PROVIDERS = {
     "custom": {
         "display": "Custom XYZ template", "key": None,
         "url": "", "attribution": "", "max_zoom": 22,
-        "hint": "Any {z}/{x}/{y} service — a national portal, a company server, a tileserver of your own. "
-                "Use {key} in the template for a token, {s} for a subdomain, {r} for @2x tiles."},
+        "hint": "Any {z}/{x}/{y} service — a national portal, a company server, a tileserver of your own, "
+                "or a keyed CARTO basemap. Use {key} in the template for a token, {s} for a subdomain, {r} for @2x tiles."},
     "mbtiles": {
         "display": "MBTiles file (offline)", "key": False,
         "url": "", "attribution": "", "max_zoom": 22,
@@ -71,7 +82,7 @@ PROVIDERS = {
     "none": {"display": "No basemap (data only)", "key": False, "url": "", "attribution": "", "max_zoom": 22},
 }
 
-DEFAULTS = {"provider": "carto-light", "key": "", "url": "", "attribution": "",
+DEFAULTS = {"provider": "esri-gray", "key": "", "url": "", "attribution": "",
             "mbtiles": "", "cache": True, "version": 1}
 
 USER_AGENT = "GISclaw (+https://github.com/geumjin99/GISclaw)"
@@ -83,7 +94,7 @@ def settings(store) -> dict:
     out = dict(DEFAULTS)
     out.update({k: v for k, v in data.items() if k in DEFAULTS})
     if out["provider"] not in PROVIDERS:
-        out["provider"] = "carto-light"
+        out["provider"] = "esri-gray"
     return out
 
 
