@@ -93,6 +93,15 @@ less reliably than the hosted flagships, so read their work closely.
 
 Then create a project, attach your data, and type what you want.
 
+**Without Docker (beta).** On macOS or Linux, `bash install.sh` sets up a
+private Python environment beside the source and, on macOS, a `GISclaw.app`
+you can double-click; on Windows, `powershell -ExecutionPolicy Bypass -File
+install.ps1` does the same and puts a shortcut on the Desktop. GISclaw then
+opens in its own window, and your work lives in the user data folder
+(`~/Library/Application Support/GISclaw`, `%LOCALAPPDATA%\GISclaw`,
+`~/.local/share/GISclaw`). Installed this way the model's code runs with your
+own permissions — read the note in [`DISCLAIMER.md`](DISCLAIMER.md).
+
 Your work — projects, outputs, run history, and the keys you entered — is kept
 in `projects/` beside the compose file, as ordinary files on your disk. That is
 also the folder a new release replaces, so if you expect to update later, set

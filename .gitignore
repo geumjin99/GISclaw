@@ -39,3 +39,9 @@ docs/07_lessons/
 
 # Tests
 .pytest_cache/
+
+# Desktop install (created by install.sh / install.ps1)
+.venv/
+gisclaw
+GISclaw.cmd
+GISclaw.app/

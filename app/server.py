@@ -63,7 +63,7 @@ from app.skills_store import SkillsStore
 # Config
 # ============================================================
 WEB_DIR = os.path.join(PROJECT_ROOT, "app", "web")
-APP_LOG = os.path.join(PROJECT_ROOT, "app", "server.log")
+APP_LOG = os.environ.get("GISCLAW_LOG") or os.path.join(PROJECT_ROOT, "app", "server.log")
 log = get_app_logger(APP_LOG)
 
 # Workspace root: env override, else <repo>/projects for local dev.

@@ -15,6 +15,7 @@ The paper's reference implementation stays on the `paper-v2` branch (tag `v2-gsi
 - Windows: the project data link inside a run is a junction when a symlink is not permitted.
 - Fixes: a replayed run showed its answer twice; a file name shared by data/ and outputs/ made one layer replace the other; a `.json` that is not GeoJSON opens as text.
 - A test suite (`pytest -q tests`).
+- Desktop install without Docker (beta): `install.sh` / `install.ps1`, a native window, data in the user data folder.
 
 ## 1.0.0 — 2026-09-01
 

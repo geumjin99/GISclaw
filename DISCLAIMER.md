@@ -70,6 +70,15 @@ Studio, vLLM) keeps the reasoning on your own hardware too, and nothing is sent
 to any provider. Small local models are noticeably weaker at planning a
 multi-step analysis than the hosted flagships, so read their work closely.
 
+## Installed without Docker, the code runs as you
+
+GISclaw executes the Python the model writes. Inside the Docker container that
+code can reach only the mounted data folder. Installed directly on your
+computer — with `install.sh`, `install.ps1`, or the desktop application — it
+runs with your own permissions and can read, write and delete anything you
+can. Keep the work in projects you are prepared to lose, and prefer the Docker
+form for data or machines where that matters.
+
 ## Costs are yours
 
 You supply your own API keys and are billed directly by the provider. A long or

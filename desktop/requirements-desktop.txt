@@ -1,0 +1,18 @@
+# GISclaw as a desktop application, installed with pip/uv wheels only —
+# no conda. The GIS stack ships binary wheels for Windows, macOS (Apple
+# Silicon) and Linux that carry their own GDAL/PROJ data.
+
+# --- GIS core ---
+geopandas>=1.0
+pyogrio>=0.9
+rasterio>=1.4
+fiona>=1.10
+shapely>=2.0
+pyproj>=3.6
+rtree>=1.1
+
+# --- native window ---
+pywebview>=5.1
+
+# --- the app itself (web server, cloud SDKs, analysis packages) ---
+-r ../app/requirements.txt
