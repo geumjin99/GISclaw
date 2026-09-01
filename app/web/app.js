@@ -2029,12 +2029,13 @@
   // it as a service, point this at your own repository — that is what AGPL §13
   // asks for, and it saves your users hunting for it.
   const SOURCE_URL = 'https://github.com/geumjin99/GISclaw';
+  let appVersion = '';
 
   function openAbout() {
     $('#journalTitle').textContent = 'About GISclaw';
     $('#journalPath').textContent = 'AGPL-3.0-or-later';
     $('#journalBody').innerHTML = mdToHtml([
-      '**GISclaw** — an LLM agent for geospatial analysis.',
+      `**GISclaw**${appVersion ? ' ' + appVersion : ''} — an LLM agent for geospatial analysis.`,
       '',
       'Copyright (C) 2026 Han Jinzhen',
       '',
@@ -2229,6 +2230,7 @@
   }
 
   async function init() {
+    fetch('/api/version').then(r => r.json()).then(j => { appVersion = j.version || ''; }).catch(() => {});
     await loadViewerFollow();
     const haveModel = await refreshModelSelect();
     await loadProjects();

@@ -47,6 +47,8 @@ import threading
 import time
 from datetime import datetime
 
+APP_VERSION = "1.0.0"
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 os.chdir(PROJECT_ROOT)
@@ -739,7 +741,7 @@ def run_agent_in_thread(pid: str, model_key: str, instruction: str, msg_queue: q
 # ============================================================
 # FastAPI app
 # ============================================================
-app = FastAPI(title="GISclaw", description="GIS Analyst Agent (product)")
+app = FastAPI(title="GISclaw", description="GIS Analyst Agent (product)", version=APP_VERSION)
 
 
 @app.get("/api/models")
@@ -1121,6 +1123,11 @@ async def api_append_memory(request: Request):
     text = STORE.append_memory(line, section=section)
     log.info(f"memory += [{section}] {line[:80]}")
     return {"text": text}
+
+
+@app.get("/api/version")
+async def api_version():
+    return {"version": APP_VERSION}
 
 
 @app.get("/api/tools")
