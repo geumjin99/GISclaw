@@ -86,6 +86,12 @@ class OpenAIEngine:
         self._total_time = 0.0
         self._total_input_tokens = 0
         self._total_output_tokens = 0
+        # OpenAI and DeepSeek serve repeated prompt prefixes from a cache and
+        # bill those tokens at a fraction of the input rate. They are counted
+        # apart so the estimate does not overstate what a long run cost.
+        self._cache_read_tokens = 0
+        # Some models reject a temperature. Once one has, stop sending it.
+        self._send_temperature = True
 
     def load_model(self) -> bool:
         """Create the client. Returns False instead of raising."""
@@ -162,29 +168,41 @@ class OpenAIEngine:
             if is_gpt5 or is_gemini_thinking:
                 effective_max_tokens = max(effective_max_tokens, 16384)
 
-            # No `stop` for these; the reply is trimmed below instead.
+            kwargs = {"model": self.model_name, "messages": messages}
+            # No `stop` for the reasoning families; the reply is trimmed below.
             if needs_manual_stop:
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages,
-                    max_completion_tokens=effective_max_tokens,
-                    temperature=temperature or self.temperature,
-                    # `stop` unsupported — trimmed after generation.
-                )
+                kwargs["max_completion_tokens"] = effective_max_tokens
             else:
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages,
-                    max_tokens=effective_max_tokens,
-                    temperature=temperature or self.temperature,
-                    stop=stop,
-                )
+                kwargs["max_tokens"] = effective_max_tokens
+                kwargs["stop"] = stop
+            if self._send_temperature:
+                kwargs["temperature"] = temperature or self.temperature
+            try:
+                response = self.client.chat.completions.create(**kwargs)
+            except Exception as e:
+                # Reasoning models accept only their default temperature and
+                # answer anything else with a 400. Retry once without it, and
+                # remember for the rest of the run.
+                if self._send_temperature and "temperature" in str(e).lower():
+                    self._send_temperature = False
+                    kwargs.pop("temperature", None)
+                    response = self.client.chat.completions.create(**kwargs)
+                else:
+                    raise
 
             # A thinking model sometimes comes back with no content at all.
             raw_content = response.choices[0].message.content
             text = strip_reasoning(raw_content.strip()) if raw_content else ""
-            output_tokens = response.usage.completion_tokens if response.usage else 0
-            input_tokens = response.usage.prompt_tokens if response.usage else 0
+            usage = response.usage
+            output_tokens = usage.completion_tokens if usage else 0
+            input_tokens = usage.prompt_tokens if usage else 0
+            cached = 0
+            if usage:
+                # OpenAI: prompt_tokens_details.cached_tokens (inside prompt_tokens).
+                # DeepSeek: prompt_cache_hit_tokens (also inside prompt_tokens).
+                details = getattr(usage, "prompt_tokens_details", None)
+                cached = (getattr(details, "cached_tokens", 0) or 0) if details else 0
+                cached = cached or (getattr(usage, "prompt_cache_hit_tokens", 0) or 0)
 
             # Hand the loop something parseable so it asks again rather than
             # crashing on an empty string.
@@ -203,7 +221,8 @@ class OpenAIEngine:
 
             self._total_calls += 1
             self._total_tokens_generated += output_tokens
-            self._total_input_tokens += input_tokens
+            self._total_input_tokens += input_tokens - cached
+            self._cache_read_tokens += cached
             self._total_output_tokens += output_tokens
             self._total_time += elapsed_ms
 
@@ -225,15 +244,23 @@ class OpenAIEngine:
         """Call counts, token totals and an estimated spend."""
         avg_latency = self._total_time / max(self._total_calls, 1)
         in_cost, out_cost = self.cost_per_m
+        # A cache hit is billed at a tenth of the input rate by both OpenAI
+        # and DeepSeek; close enough for an estimate.
         estimated_cost = (
             self._total_input_tokens * in_cost / 1_000_000
+            + self._cache_read_tokens * in_cost * 0.10 / 1_000_000
             + self._total_output_tokens * out_cost / 1_000_000
         )
+        prompt_tokens = self._total_input_tokens + self._cache_read_tokens
         return {
             "total_calls": self._total_calls,
             "total_tokens": self._total_tokens_generated,
             "total_input_tokens": self._total_input_tokens,
             "total_output_tokens": self._total_output_tokens,
+            "cache_read_tokens": self._cache_read_tokens,
+            "cache_write_tokens": 0,
+            "prompt_tokens": prompt_tokens,
+            "cache_hit_rate": round(self._cache_read_tokens / prompt_tokens, 3) if prompt_tokens else 0.0,
             "total_time_ms": self._total_time,
             "avg_latency_ms": avg_latency,
             "estimated_cost_usd": round(estimated_cost, 4),
@@ -246,6 +273,7 @@ class OpenAIEngine:
         self._total_time = 0.0
         self._total_input_tokens = 0
         self._total_output_tokens = 0
+        self._cache_read_tokens = 0
 
 
 class ClaudeEngine:

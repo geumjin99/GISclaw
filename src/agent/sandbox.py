@@ -25,11 +25,59 @@ Design:
 import ctypes
 import io
 import os
+import sys
 import threading
 import time
 import traceback
-from contextlib import redirect_stdout, redirect_stderr
 from typing import Callable, Dict, Optional
+
+
+class _StreamRouter:
+    """A stand-in for sys.stdout / sys.stderr that delivers per thread.
+
+    `contextlib.redirect_stdout` swaps the stream for the whole process, so
+    while a snippet ran, anything any other thread printed landed in the
+    snippet's output — and the snippet's output could leak the other way. The
+    router sends a thread's writes to the buffer bound to it, and everything
+    else to the real stream.
+    """
+
+    def __init__(self, fallback):
+        self._fallback = fallback
+        self._targets = {}
+
+    def bind(self, tid, stream):
+        self._targets[tid] = stream
+
+    def unbind(self, tid):
+        self._targets.pop(tid, None)
+
+    def _current(self):
+        return self._targets.get(threading.get_ident(), self._fallback)
+
+    def write(self, s):
+        return self._current().write(s)
+
+    def writelines(self, lines):
+        return self._current().writelines(lines)
+
+    def flush(self):
+        try:
+            return self._current().flush()
+        except Exception:
+            pass
+
+    def __getattr__(self, name):
+        return getattr(self._fallback, name)
+
+
+def _routers():
+    """Install the routers once, on first use; return (stdout, stderr)."""
+    if not isinstance(sys.stdout, _StreamRouter):
+        sys.stdout = _StreamRouter(sys.stdout)
+    if not isinstance(sys.stderr, _StreamRouter):
+        sys.stderr = _StreamRouter(sys.stderr)
+    return sys.stdout, sys.stderr
 
 
 class SandboxInterrupt(BaseException):
@@ -206,8 +254,13 @@ os.makedirs('pred_results', exist_ok=True)
         os.chdir(self.work_dir)
         namespace = self.namespace
 
+        out_router, err_router = _routers()
+
         def _target():
             nonlocal success
+            tid = threading.get_ident()
+            out_router.bind(tid, stdout_buf)
+            err_router.bind(tid, stderr_buf)
             try:
                 exec(code, namespace)
             except SandboxInterrupt:
@@ -215,10 +268,13 @@ os.makedirs('pred_results', exist_ok=True)
             except BaseException:
                 success = False
                 stderr_buf.write(traceback.format_exc())
+            finally:
+                out_router.unbind(tid)
+                err_router.unbind(tid)
 
         worker = threading.Thread(target=_target, name="sandbox-exec", daemon=True)
         try:
-            with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
+            if True:
                 worker.start()
                 while worker.is_alive():
                     worker.join(0.2)

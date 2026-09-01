@@ -1282,6 +1282,8 @@ async def _stream_run(run):
             except queue.Empty:
                 yield {"event": "heartbeat", "data": "{}"}
                 continue
+            except RuntimeError:
+                break           # the server is shutting down
             if msg is None:
                 break
             yield {"event": msg["type"], "data": json.dumps(msg, ensure_ascii=False)}
@@ -1360,10 +1362,11 @@ class NoCacheStaticFiles(StaticFiles):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    return FileResponse(
-        os.path.join(WEB_DIR, "index.html"),
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
-    )
+    # The asset query string is the version, so a new release is never served
+    # from a browser's cached copy of the old script.
+    with open(os.path.join(WEB_DIR, "index.html"), encoding="utf-8") as f:
+        html = f.read().replace("__V__", APP_VERSION)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 if os.path.isdir(WEB_DIR):

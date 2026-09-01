@@ -180,44 +180,58 @@
     });
   }
 
+  // Layers are keyed by their location (data/x.geojson, outputs/x.geojson)
+  // and shown by file name — the same name in both folders is two layers.
+  const layerKey = (where, path) => `${where}/${path}`;
+  const layerLabel = key => key.split('/').pop();
+
   async function showFileOnMap(path, where) {
-    const name = path.split('/').pop();
-    if (shownLayers[name]) { map.removeLayer(shownLayers[name].layer); delete shownLayers[name]; renderLegend(); return; }
+    const key = layerKey(where, path), name = layerLabel(key);
+    if (shownLayers[key]) { map.removeLayer(shownLayers[key].layer); delete shownLayers[key]; renderLegend(); return; }
     const url = `/api/projects/${state.project.id}/file?where=${where}&path=${encodeURIComponent(path)}`;
     let gj;
     try { gj = await jget(url); } catch (e) { addMsg({ kind: 'error', text: `Could not load ${name}` }); return; }
     if (gj.error) { addMsg({ kind: 'error', text: `${name}: ${gj.error}` }); return; }
+    if (!gj || gj.type !== 'FeatureCollection' && gj.type !== 'Feature') {
+      // Plain JSON that only looked like a layer by its extension.
+      openDataView(name, JSON.stringify(gj, null, 2));
+      return;
+    }
     if (gj._notice) addMsg({ kind: 'system', text: `${name}: ${gj._notice}` });
     const color = LAYER_COLORS[colorIdx++ % LAYER_COLORS.length];
-    const layer = buildGeoLayer(gj, color);
-    layer.addTo(map);
-    shownLayers[name] = { layer, color, gj, kind: 'vector', fillOpacity: 0.22, visible: true };
+    let layer;
+    try { layer = buildGeoLayer(gj, color); layer.addTo(map); }
+    catch (e) { addMsg({ kind: 'error', text: `${name}: not a valid GeoJSON layer.` }); return; }
+    shownLayers[key] = { layer, color, gj, kind: 'vector', fillOpacity: 0.22, visible: true };
     try { map.fitBounds(layer.getBounds(), { padding: [24, 24] }); } catch (e) {}
     renderLegend();
     switchTab('map');
   }
 
-  async function addRasterOverlay(name, overlayUrl) {
-    if (shownLayers[name]) { map.removeLayer(shownLayers[name].layer); delete shownLayers[name]; }
+  async function addRasterOverlay(name, overlayUrl, where = 'outputs') {
+    const key = layerKey(where, name);
+    if (shownLayers[key]) { map.removeLayer(shownLayers[key].layer); delete shownLayers[key]; }
     let pl;
     try { pl = await jget(overlayUrl); } catch (e) { return; }
     if (!pl || pl.error || !pl.bounds) { addMsg({ kind: 'error', text: `${name}: ${pl && pl.error || 'overlay failed'}` }); return; }
     const b = pl.bounds;
     const layer = L.imageOverlay(pl.image, [[b.south, b.west], [b.north, b.east]], { opacity: 0.85 });
     layer.addTo(map);
-    shownLayers[name] = { layer, color: '#3f7d58', isRaster: true, kind: 'raster', opacity: 0.85, visible: true };
+    shownLayers[key] = { layer, color: '#3f7d58', isRaster: true, kind: 'raster', opacity: 0.85, visible: true };
     try { map.fitBounds(layer.getBounds(), { padding: [24, 24] }); } catch (e) {}
     renderLegend();
     switchTab('map');
   }
 
-  function addResultGeoToMap(url, name) {
+  function addResultGeoToMap(url, name, where = 'outputs') {
+    const key = layerKey(where, name);
     jget(url).then(gj => {
-      if (!gj || gj.error) return;
+      if (!gj || gj.error || !gj.type) return;
+      if (shownLayers[key]) { map.removeLayer(shownLayers[key].layer); delete shownLayers[key]; }
       const color = LAYER_COLORS[colorIdx++ % LAYER_COLORS.length];
-      const layer = buildGeoLayer(gj, color);
-      layer.addTo(map);
-      shownLayers[name] = { layer, color, gj, kind: 'vector', fillOpacity: 0.22, visible: true };
+      let layer;
+      try { layer = buildGeoLayer(gj, color); layer.addTo(map); } catch (e) { return; }
+      shownLayers[key] = { layer, color, gj, kind: 'vector', fillOpacity: 0.22, visible: true };
       try { map.fitBounds(layer.getBounds(), { padding: [24, 24] }); } catch (e) {}
       renderLegend();
     }).catch(() => {});
@@ -243,10 +257,11 @@
       const kind = o.kind === 'raster' ? 'raster' : 'vector';
       const div = document.createElement('div');
       div.className = 'legend-layer interactive' + (o.visible === false ? ' hidden-layer' : '');
+      div.title = name;
       div.innerHTML =
         `<div class="legend-layer-head">`
         + `<span class="lyr-vis" title="Toggle visibility">${svgIcon('eye', 'ctx-ic')}</span>`
-        + `<span class="legend-layer-name">${esc(name)}</span>`
+        + `<span class="legend-layer-name">${esc(layerLabel(name))}</span>`
         + `<span class="legend-layer-meta">${kind}</span></div>`
         + `<div class="legend-chips"><span class="chip"><i style="background:${o.color}"></i>${kind}</span></div>`;
       div.querySelector('.lyr-vis').addEventListener('click', ev => { ev.stopPropagation(); toggleLayerVisibility(name); });
@@ -325,10 +340,10 @@
     const pop = document.createElement('div');
     pop.className = 'symb-pop'; pop.id = 'symbPop';
     if (o.kind === 'raster') {
-      pop.innerHTML = `<div class="symb-h">${esc(name)}</div>`
+      pop.innerHTML = `<div class="symb-h">${esc(layerLabel(name))}</div>`
         + `<div class="symb-row"><span>Opacity</span><input type="range" min="0" max="100" value="${Math.round((o.opacity ?? 0.85) * 100)}" id="symbOpacity"></div>`;
     } else {
-      pop.innerHTML = `<div class="symb-h">${esc(name)}</div>`
+      pop.innerHTML = `<div class="symb-h">${esc(layerLabel(name))}</div>`
         + `<div class="symb-row"><span>Color</span><input type="color" value="${o.color}" id="symbColor"></div>`
         + `<div class="symb-row"><span>Fill opacity</span><input type="range" min="0" max="100" value="${Math.round((o.fillOpacity ?? 0.22) * 100)}" id="symbFill"></div>`;
     }
@@ -351,7 +366,7 @@
     const CAP = 2000;
     attrCols = [...new Set(feats.slice(0, 200).flatMap(f => Object.keys(f.properties || {})))];
     attrRows = feats.slice(0, CAP).map(f => f.properties || {});
-    $('#attrTitle').textContent = `${name} — ${feats.length} feature${feats.length === 1 ? '' : 's'}`
+    $('#attrTitle').textContent = `${layerLabel(name)} — ${feats.length} feature${feats.length === 1 ? '' : 's'}`
       + (feats.length > CAP ? ` (showing first ${CAP})` : '');
     $('#attrFilter').value = '';
     renderAttrTable('');
@@ -508,7 +523,7 @@
       it.classList.add('active');
       const ex = extOf(fn);
       if (IMG_EXT.includes(ex)) openImageView(fn, `/api/projects/${state.project.id}/file?where=${where}&path=${encodeURIComponent(fn)}`);
-      else if (ex === 'tif' || ex === 'tiff') addRasterOverlay(fn, `/api/projects/${state.project.id}/overlay?where=${where}&path=${encodeURIComponent(fn)}`);
+      else if (ex === 'tif' || ex === 'tiff') addRasterOverlay(fn, `/api/projects/${state.project.id}/overlay?where=${where}&path=${encodeURIComponent(fn)}`, where);
       else if (GEO_EXT.includes(ex)) showFileOnMap(fn, where);
       else openTextFile(fn, where);
     });
@@ -1285,7 +1300,8 @@
       undefined, 'DELETE');
     if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
     // Drop it from the map and the viewer if it happened to be open.
-    if (shownLayers[fn]) { map.removeLayer(shownLayers[fn].layer); delete shownLayers[fn]; renderLegend(); }
+    const key = layerKey(where, fn);
+    if (shownLayers[key]) { map.removeLayer(shownLayers[key].layer); delete shownLayers[key]; renderLegend(); }
     if (state.imageName === fn) resetImageView();
     addMsg({ kind: 'system', text: `Deleted ${res.removed.join(', ')} from ${where}/.` });
     await refreshTree();
@@ -2200,7 +2216,7 @@
 
   function renderHistoryEntry(e) {
     if (e.role === 'user') {
-      const m = addMsg({ kind: 'system', html: `<b>You ·</b> ${esc(e.text || '')}` });
+      const m = addMsg({ kind: 'user', text: e.text || '' });
       m.classList.add('msg-history');
       return;
     }
@@ -2211,9 +2227,13 @@
     }
     const outs = e.outputs || [];
     const chip = `<span class="run-chip ${e.success ? 'ok' : 'bad'}" data-run="${esc(e.run_id || '')}">${esc(e.run_id || 'failed')}</span>`;
-    const stats = e.success
-      ? `${e.rounds || 0} rounds · ${e.self_corrections || 0} self-corr · ${e.elapsed_s || 0}s`
-      : esc((e.error || 'run failed').slice(0, 140));
+    const stats = e.kind === 'tool'
+      ? esc(e.ask || 'Toolbox')
+      : e.stopped
+        ? `stopped after ${e.rounds || 0} rounds · ${e.elapsed_s || 0}s`
+        : e.success
+          ? `${e.rounds || 0} rounds · ${e.self_corrections || 0} self-corr · ${e.elapsed_s || 0}s`
+          : esc((e.error || 'run failed').slice(0, 140));
     const files = outs.length
       ? `<div class="msg-files">${outs.map(f => `<a class="run-file" data-f="${esc(f)}">${esc(f)}</a>`).join(' · ')}</div>`
       : '';
@@ -2228,7 +2248,7 @@
     });
     m.classList.add('msg-history');
     const c = m.querySelector('.run-chip');
-    if (c && e.run_id) c.addEventListener('click', () => replayRun(e.run_id));
+    if (c && e.run_id && e.kind !== 'tool') c.addEventListener('click', () => replayRun(e.run_id));
     m.querySelectorAll('.run-file').forEach(a => a.addEventListener('click', () => {
       const fn = a.dataset.f, ex = extOf(fn);
       const base = `/api/projects/${state.project.id}`;
@@ -2268,7 +2288,6 @@
       if (ev.action) traceAdd('action', null, `<code>${esc(ev.action)}</code>`);
       const obs = ev.observation_full || ev.observation;
       if (obs) {
-        if (/^finish\b/.test(ev.action || '')) addMsg({ kind: 'answer', text: String(obs) });
         if (/^finish\b/.test(ev.action || '')) renderSummary(cleanFinish(String(obs)), null);
         else traceAdd(ev.success === false ? 'error' : 'observe', String(obs).slice(0, 600));
       }

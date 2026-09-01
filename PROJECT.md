@@ -37,7 +37,8 @@
 | E3 | 原生安装包：python-build-standalone 环境 + pywebview 窗口（同一份 Web 前端，Win 用 WebView2 / mac 用 WKWebView）+ Inno Setup / create-dmg；GitHub Actions 矩阵出包 | ⬜ ADR-003 |
 | E4 | 原生模式的安全边界：沙箱工作目录限定、UI 提示、DISCLAIMER 补「原生模式没有容器隔离」 | ⬜ E2 前置 |
 | E5 | 开发环境统一：以本仓库为唯一开发树 | ⬜ B1 |
-| E6 | 其余待办：run 历史浏览、停止运行、报告导出（HTML / PDF）、大矢量切片、更多算子、`code.py` 收录失败片段、discipline 补随机种子 / 空值纪律 | ⬜ 按需 |
+| E6 | 其余待办：run 历史浏览、报告导出（HTML / PDF）、大矢量切片、更多算子、`code.py` 收录失败片段、discipline 补随机种子 / 空值纪律 | ⬜ 按需 |
+| E7 | **代码审视与加固**（v2 开工前）：Stop 真正停止、刷新后重连、单 run 互斥、沙箱超时/取消、只绑本机 + 同页校验、Toolbox 进记录、缓存计费、上下文上限随模型、Windows junction、前端修补、测试套件 | ✅ 2026-09-01（`v2` 分支） |
 
 ## 3. 🔴 待决事项
 
@@ -61,7 +62,8 @@
 > `- [ ]` / `- [x]`（brief.sh 只抓未完成项）。
 
 - [x] E0：tag `v1.0.0` + GitHub Release + `CHANGELOG.md` + 版本号（2026-09-01）
-- [ ] 决定 B1；开 `v2` 分支，`release` 只接 v1.0.x 修复
+- [x] 开 `v2` 分支；E7 代码审视与加固（2026-09-01）
+- [ ] 决定 B1；`release` 只接 v1.0.x 修复
 - [ ] 确认 ADR-002 / ADR-003，状态改「决定」
 - [ ] E1 第一步：抽取 `index.html` 与 `app.js` 的界面字符串为 `app/web/i18n/en.json`，再生成 zh / ko
 - [ ] E4：DISCLAIMER 与 README 三语补「原生模式没有容器隔离」

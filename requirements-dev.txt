@@ -1,0 +1,5 @@
+# For running the test suite: `pip install -r requirements-dev.txt && pytest -q tests`
+pytest>=8
+httpx>=0.27
+# Optional — the browser test skips itself without Chrome + selenium.
+selenium>=4.20
