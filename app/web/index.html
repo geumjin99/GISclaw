@@ -34,52 +34,63 @@
         </svg>
         <div class="brand-text">
           <div class="brand-name">GISclaw</div>
-          <div class="brand-sub">GIS Analyst Agent</div>
+          <div class="brand-sub" data-i18n>GIS Analyst Agent</div>
         </div>
       </div>
       <div class="status">
         <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Idle</span>
+        <span id="statusText" data-i18n>Idle</span>
       </div>
     </header>
 
     <!-- Menu bar (desktop-GIS style) -->
     <nav class="menubar" id="menubar">
       <div class="menu" data-menu="project">
-        <button class="menu-btn" type="button">Project</button>
+        <button class="menu-btn" type="button" data-i18n>Project</button>
         <div class="menu-drop">
-          <div class="menu-item" data-act="new">＋ New project…</div>
-          <div class="menu-item" data-act="adddata">＋ Add data…</div>
+          <div class="menu-item" data-act="new" data-i18n>＋ New project…</div>
+          <div class="menu-item" data-act="adddata" data-i18n>＋ Add data…</div>
           <div class="menu-sep"></div>
-          <div class="menu-item" data-act="log">Log (compacted)…</div>
-          <div class="menu-item" data-act="journal">Journal (full record)…</div>
-          <div class="menu-item" data-act="note">Add note to journal…</div>
-          <div class="menu-item" data-act="newthread">Start a new conversation</div>
+          <div class="menu-item" data-act="log" data-i18n>Log (compacted)…</div>
+          <div class="menu-item" data-act="journal" data-i18n>Journal (full record)…</div>
+          <div class="menu-item" data-act="note" data-i18n>Add note to journal…</div>
+          <div class="menu-item" data-act="newthread" data-i18n>Start a new conversation</div>
           <div class="menu-sep"></div>
-          <div class="menu-item" data-act="archived">Archived projects…</div>
+          <div class="menu-item" data-act="archived" data-i18n>Archived projects…</div>
         </div>
       </div>
       <div class="menu" data-menu="tools">
-        <button class="menu-btn" type="button">Tools</button>
+        <button class="menu-btn" type="button" data-i18n>Tools</button>
         <div class="menu-drop">
-          <div class="menu-item" data-act="toolbox">Toolbox…</div>
+          <div class="menu-item" data-act="toolbox" data-i18n>Toolbox…</div>
         </div>
       </div>
       <div class="menu" data-menu="settings">
-        <button class="menu-btn" type="button">Settings</button>
+        <button class="menu-btn" type="button" data-i18n>Settings</button>
         <div class="menu-drop">
-          <div class="menu-item" data-act="set-keys">API keys…</div>
-          <div class="menu-item" data-act="set-models">Models…</div>
-          <div class="menu-item" data-act="set-local">Local models…</div>
-          <div class="menu-item" data-act="set-map">Map…</div>
-          <div class="menu-item" data-act="set-skills">Skills…</div>
-          <div class="menu-item" data-act="set-memory">Memory…</div>
+          <div class="menu-item" data-act="set-keys" data-i18n>API keys…</div>
+          <div class="menu-item" data-act="set-models" data-i18n>Models…</div>
+          <div class="menu-item" data-act="set-local" data-i18n>Local models…</div>
+          <div class="menu-item" data-act="set-map" data-i18n>Map…</div>
+          <div class="menu-item" data-act="set-skills" data-i18n>Skills…</div>
+          <div class="menu-item" data-act="set-memory" data-i18n>Memory…</div>
         </div>
       </div>
       <div class="menu" data-menu="help">
-        <button class="menu-btn" type="button">Help</button>
+        <button class="menu-btn" type="button" data-i18n>Help</button>
         <div class="menu-drop">
-          <div class="menu-item" data-act="about">About GISclaw &amp; source code…</div>
+          <div class="menu-item" data-act="about" data-i18n>About GISclaw &amp; source code…</div>
+        </div>
+      </div>
+      <div class="menu menu-lang" data-menu="lang" title="Language / 语言 / 언어">
+        <button class="menu-btn lang-btn" type="button" aria-label="Language">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+          <span id="langCode">EN</span>
+        </button>
+        <div class="menu-drop menu-drop-right">
+          <div class="menu-item" data-lang="en">English</div>
+          <div class="menu-item" data-lang="zh">中文</div>
+          <div class="menu-item" data-lang="ko">한국어</div>
         </div>
       </div>
     </nav>
@@ -89,48 +100,48 @@
       <!-- Left: projects -->
       <aside class="panel panel-left">
         <div class="panel-head">
-          <div class="panel-title">Projects</div>
+          <div class="panel-title" data-i18n>Projects</div>
         </div>
         <div class="tree" id="catalog"><!-- filled by app.js --></div>
         <div class="side-foot">
           <!-- Actions moved to the top menu bar. Buttons kept (hidden) so their handlers still wire up. -->
-          <button class="foot-btn" id="btnNewProject" title="Create a new project" hidden>＋ New</button>
-          <button class="foot-btn" id="btnAddData" disabled title="Add data to the selected project" hidden>＋ Add data…</button>
-          <button class="foot-btn" id="btnToolbox" disabled title="Run GIS operations directly" hidden>Toolbox…</button>
-          <div class="foot-line" id="footHint">Use the <b>Project</b> menu above to create a project and add data.</div>
+          <button class="foot-btn" id="btnNewProject" title="Create a new project" hidden data-i18n data-i18n-attr="title">＋ New</button>
+          <button class="foot-btn" id="btnAddData" disabled title="Add data to the selected project" hidden data-i18n data-i18n-attr="title">＋ Add data…</button>
+          <button class="foot-btn" id="btnToolbox" disabled title="Run GIS operations directly" hidden data-i18n data-i18n-attr="title">Toolbox…</button>
+          <div class="foot-line" id="footHint" data-i18n>Use the <b>Project</b> menu above to create a project and add data.</div>
         </div>
       </aside>
 
       <!-- Drag to resize the projects panel -->
-      <div class="splitter" id="splitLeft" title="Drag to resize · double-click to reset"></div>
+      <div class="splitter" id="splitLeft" title="Drag to resize · double-click to reset" data-i18n-attr="title"></div>
 
       <!-- Center: viewer (map / code / result image) -->
       <section class="panel panel-center">
         <div class="viewer-tabs">
           <button class="tab active" data-tab="map">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7 6-3 6 3 6-3v13l-6 3-6-3-6 3V7Z"/><path d="M9 4v13M15 7v13"/></svg>
-            <span>Map</span>
+            <span data-i18n>Map</span>
           </button>
           <button class="tab" data-tab="code">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/><path d="M13 4 11 20"/></svg>
-            <span>Code</span>
+            <span data-i18n>Code</span>
           </button>
           <button class="tab" data-tab="data" id="dataTab" hidden>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-            <span>Table</span>
+            <span data-i18n>Table</span>
           </button>
           <button class="tab" data-tab="image" id="imageTab" hidden>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-7 7"/></svg>
-            <span>Result</span>
+            <span data-i18n>Result</span>
           </button>
           <div class="tabs-spacer"></div>
           <div class="viewer-meta" id="viewerMeta">
             <span class="meta-key">Project</span><span class="meta-val" id="regionVal">—</span>
           </div>
           <div class="viewer-actions">
-            <button class="ghost-btn" id="btnZoomIn" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
-            <button class="ghost-btn" id="btnZoomOut" title="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
-            <button class="ghost-btn" id="btnFit" title="Fit to data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/></svg></button>
+            <button class="ghost-btn" id="btnZoomIn" title="Zoom in" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+            <button class="ghost-btn" id="btnZoomOut" title="Zoom out" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+            <button class="ghost-btn" id="btnFit" title="Fit to data" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/></svg></button>
           </div>
         </div>
 
@@ -141,9 +152,9 @@
             <div class="map-compass">N</div>
           </div>
           <aside class="legend" id="legend">
-            <div class="legend-title">Map layers</div>
+            <div class="legend-title" data-i18n>Map layers</div>
             <div class="legend-layers" id="legendLayers"></div>
-            <div class="legend-hint">Click a dataset on the left to show it here.</div>
+            <div class="legend-hint" data-i18n>Click a dataset on the left to show it here.</div>
           </aside>
         </div>
 
@@ -154,8 +165,8 @@
               <span class="image-filename" id="dataFilename">—</span>
               <span class="image-meta" id="dataMeta"></span>
               <span class="ca-spacer"></span>
-              <input class="text-input data-filter" id="dataFilter" placeholder="Filter rows…" spellcheck="false" />
-              <button class="mini-btn" id="dataRaw">Raw text</button>
+              <input class="text-input data-filter" id="dataFilter" placeholder="Filter rows…" spellcheck="false" data-i18n-attr="placeholder" />
+              <button class="mini-btn" id="dataRaw" data-i18n>Raw text</button>
             </div>
             <div class="data-stage" id="dataStage"></div>
           </div>
@@ -166,7 +177,7 @@
           <div class="image-wrap">
             <div class="image-chrome">
               <span class="image-filename" id="imageFilename">—</span>
-              <span class="image-meta" id="imageMeta"></span>
+              <span class="image-meta" id="imageMeta" data-i18n></span>
             </div>
             <div class="image-stage"><img id="imageEl" alt="Analysis result" /></div>
           </div>
@@ -177,7 +188,7 @@
           <div class="code-chrome">
             <div class="code-file-tabs"><div class="code-file-tab active" id="codeFileName">analysis.py</div></div>
             <div class="code-run-controls">
-              <span class="code-run-state" id="codeRunState">Ready</span>
+              <span class="code-run-state" id="codeRunState" data-i18n>Ready</span>
             </div>
           </div>
           <div class="code-area">
@@ -185,60 +196,60 @@
             <pre class="code-lines" id="codeLines"></pre>
           </div>
           <div class="code-output" id="codeOutput">
-            <div class="code-output-head">Execution output</div>
+            <div class="code-output-head" data-i18n>Execution output</div>
             <div class="code-output-body" id="codeOutputBody">
-              <span class="out-muted">Output appears here as the agent runs code.</span>
+              <span class="out-muted" data-i18n>Output appears here as the agent runs code.</span>
             </div>
           </div>
         </div>
 
         <div class="center-footer">
-          <span class="fx" id="stepCount">Steps · 0</span>
-          <span class="fx-sep"></span>
-          <span class="fx" id="selfCorrCount">Self-corrections · 0</span>
-          <span class="fx-sep"></span>
-          <span class="fx" id="timerCount">Elapsed · 00:00</span>
+          <span class="fx" id="stepCount" data-i18n>Steps · 0</span>
+          <span class="fx-sep" data-i18n></span>
+          <span class="fx" id="selfCorrCount" data-i18n>Self-corrections · 0</span>
+          <span class="fx-sep" data-i18n></span>
+          <span class="fx" id="timerCount" data-i18n>Elapsed · 00:00</span>
         </div>
       </section>
 
       <!-- Drag to resize the conversation panel -->
-      <div class="splitter" id="splitRight" title="Drag to resize · double-click to reset"></div>
+      <div class="splitter" id="splitRight" title="Drag to resize · double-click to reset" data-i18n-attr="title"></div>
 
       <!-- Right: conversation -->
       <aside class="panel panel-right">
         <div class="chat-head">
           <div class="chat-title-row">
-            <span class="chat-h-title" id="chatTaskTitle">No project selected</span>
-            <span class="chat-h-badge">AI analyst</span>
+            <span class="chat-h-title" id="chatTaskTitle" data-i18n>No project selected</span>
+            <span class="chat-h-badge" data-i18n>AI analyst</span>
           </div>
-          <div class="chat-h-sub">Describe the analysis, pick a model, then press Run.</div>
+          <div class="chat-h-sub" data-i18n>Describe the analysis, pick a model, then press Run.</div>
         </div>
 
         <div class="chat-scroll" id="chatScroll">
           <div class="msg msg-system">
-            <div class="msg-meta"><span class="agent-tag">Info</span><span class="ts"></span></div>
-            <div class="msg-body">Create a project on the left, add your GIS data, then describe an analysis and press <b>Run</b>.</div>
+            <div class="msg-meta"><span class="agent-tag" data-i18n>Info</span><span class="ts"></span></div>
+            <div class="msg-body" data-i18n>Create a project on the left, add your GIS data, then describe an analysis and press <b>Run</b>.</div>
           </div>
         </div>
 
         <div class="chat-compose">
           <div class="textarea-wrap">
-            <textarea id="promptInput" rows="4" spellcheck="false" placeholder="e.g. Compute building density per block and map it."></textarea>
+            <textarea id="promptInput" rows="4" spellcheck="false" placeholder="e.g. Compute building density per block and map it." data-i18n-attr="placeholder"></textarea>
           </div>
           <div class="compose-actions">
-            <select id="modelSelect" class="model-select" title="Model"></select>
+            <select id="modelSelect" class="model-select" title="Model" data-i18n-attr="title"></select>
             <span class="ca-spacer"></span>
-            <button class="reset-btn" id="resetBtn" title="Clear the view">
+            <button class="reset-btn" id="resetBtn" title="Clear the view" data-i18n-attr="title">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-              <span>Clear</span>
+              <span data-i18n>Clear</span>
             </button>
             <button class="primary-btn" id="startBtn" disabled>
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4.5v15l13-7.5L6 4.5Z"/></svg>
-              <span>Run</span>
+              <span data-i18n>Run</span>
             </button>
             <button class="secondary-btn hidden" id="stopBtn">
               <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
-              <span>Stop</span>
+              <span data-i18n>Stop</span>
             </button>
           </div>
         </div>
@@ -250,26 +261,26 @@
   <div class="modal-overlay hidden" id="browseModal">
     <div class="modal">
       <div class="modal-head">
-        <span class="modal-title" id="browseTitle">Add data</span>
+        <span class="modal-title" id="browseTitle" data-i18n>Add data</span>
         <button class="modal-close" id="browseClose">✕</button>
       </div>
-      <div class="modal-sub">
+      <div class="modal-sub" data-i18n>
         Pick files or folders from the workspace. They are copied into the project's <code>data/</code>.
       </div>
       <div class="browse-upload">
-        <button class="reset-btn" id="btnUploadFiles"><span>Upload files…</span></button>
-        <button class="reset-btn" id="btnUploadFolder"><span>Upload a folder…</span></button>
-        <span class="browse-hint">…or drop them here. Use this for data anywhere on your computer — the list below only reaches the mounted workspace.</span>
+        <button class="reset-btn" id="btnUploadFiles"><span data-i18n>Upload files…</span></button>
+        <button class="reset-btn" id="btnUploadFolder"><span data-i18n>Upload a folder…</span></button>
+        <span class="browse-hint" data-i18n>…or drop them here. Use this for data anywhere on your computer — the list below only reaches the mounted workspace.</span>
       </div>
       <input type="file" id="uploadFiles" multiple hidden />
       <input type="file" id="uploadFolder" webkitdirectory directory multiple hidden />
       <div class="browse-path" id="browsePath"></div>
       <div class="browse-list" id="browseList"></div>
       <div class="modal-foot">
-        <span class="browse-count" id="browseCount">0 selected</span>
+        <span class="browse-count" id="browseCount" data-i18n>0 selected</span>
         <span class="ca-spacer"></span>
-        <button class="reset-btn" id="browseCancel"><span>Cancel</span></button>
-        <button class="primary-btn" id="browseAttach"><span>Attach selected</span></button>
+        <button class="reset-btn" id="browseCancel"><span data-i18n>Cancel</span></button>
+        <button class="primary-btn" id="browseAttach"><span data-i18n>Attach selected</span></button>
       </div>
     </div>
   </div>
@@ -278,16 +289,16 @@
   <div class="modal-overlay hidden" id="archivedModal">
     <div class="modal">
       <div class="modal-head">
-        <span class="modal-title">Archived projects</span>
+        <span class="modal-title" data-i18n>Archived projects</span>
         <button class="modal-close" id="archivedClose">✕</button>
       </div>
-      <div class="modal-sub">
+      <div class="modal-sub" data-i18n>
         Archiving moves a project out of the workspace but keeps every file. Restore brings it back.
       </div>
       <div class="browse-list" id="archivedList"></div>
       <div class="modal-foot">
         <span class="ca-spacer"></span>
-        <button class="reset-btn" id="archivedDone"><span>Close</span></button>
+        <button class="reset-btn" id="archivedDone"><span data-i18n>Close</span></button>
       </div>
     </div>
   </div>
@@ -296,15 +307,15 @@
   <div class="modal-overlay hidden" id="renameModal">
     <div class="modal modal-sm">
       <div class="modal-head">
-        <span class="modal-title">Rename project</span>
+        <span class="modal-title" data-i18n>Rename project</span>
         <button class="modal-close" id="renameClose">✕</button>
       </div>
-      <div class="modal-sub">The folder on disk is renamed too, unless that name is already taken.</div>
-      <input class="text-input" id="renameName" placeholder="Project name" />
+      <div class="modal-sub" data-i18n>The folder on disk is renamed too, unless that name is already taken.</div>
+      <input class="text-input" id="renameName" placeholder="Project name" data-i18n-attr="placeholder" />
       <div class="modal-foot">
         <span class="ca-spacer"></span>
-        <button class="reset-btn" id="renameCancel"><span>Cancel</span></button>
-        <button class="primary-btn" id="renameSave"><span>Rename</span></button>
+        <button class="reset-btn" id="renameCancel"><span data-i18n>Cancel</span></button>
+        <button class="primary-btn" id="renameSave"><span data-i18n>Rename</span></button>
       </div>
     </div>
   </div>
@@ -313,14 +324,14 @@
   <div class="modal-overlay hidden" id="confirmModal">
     <div class="modal modal-sm">
       <div class="modal-head">
-        <span class="modal-title" id="confirmTitle">Are you sure?</span>
+        <span class="modal-title" id="confirmTitle" data-i18n>Are you sure?</span>
         <button class="modal-close" id="confirmClose">✕</button>
       </div>
-      <div class="modal-sub" id="confirmBody"></div>
+      <div class="modal-sub" id="confirmBody" data-i18n></div>
       <div class="modal-foot">
         <span class="ca-spacer"></span>
-        <button class="reset-btn" id="confirmCancel"><span>Cancel</span></button>
-        <button class="primary-btn danger-btn" id="confirmOk"><span>Delete</span></button>
+        <button class="reset-btn" id="confirmCancel"><span data-i18n>Cancel</span></button>
+        <button class="primary-btn danger-btn" id="confirmOk"><span data-i18n>Delete</span></button>
       </div>
     </div>
   </div>
@@ -329,15 +340,15 @@
   <div class="modal-overlay hidden" id="newModal">
     <div class="modal modal-sm">
       <div class="modal-head">
-        <span class="modal-title">New project</span>
+        <span class="modal-title" data-i18n>New project</span>
         <button class="modal-close" id="newClose">✕</button>
       </div>
-      <div class="modal-sub">A project is a working folder holding your data, outputs, and run history.</div>
-      <input class="text-input" id="newName" placeholder="Project name" />
+      <div class="modal-sub" data-i18n>A project is a working folder holding your data, outputs, and run history.</div>
+      <input class="text-input" id="newName" placeholder="Project name" data-i18n-attr="placeholder" />
       <div class="modal-foot">
         <span class="ca-spacer"></span>
-        <button class="reset-btn" id="newCancel"><span>Cancel</span></button>
-        <button class="primary-btn" id="newCreate"><span>Create</span></button>
+        <button class="reset-btn" id="newCancel"><span data-i18n>Cancel</span></button>
+        <button class="primary-btn" id="newCreate"><span data-i18n>Create</span></button>
       </div>
     </div>
   </div>
@@ -346,13 +357,13 @@
   <div class="modal-overlay hidden" id="toolModal">
     <div class="modal modal-lg">
       <div class="modal-head">
-        <span class="modal-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2 2 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>Toolbox</span></span>
+        <span class="modal-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2 2 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span data-i18n>Toolbox</span></span>
         <button class="modal-close" id="toolClose">✕</button>
       </div>
-      <div class="modal-sub">Run a GIS operation directly (deterministic, no AI cost) — or insert it as a request for the agent.</div>
+      <div class="modal-sub" data-i18n>Run a GIS operation directly (deterministic, no AI cost) — or insert it as a request for the agent.</div>
       <div class="tool-body">
         <div class="tool-list" id="toolList"></div>
-        <div class="tool-form" id="toolForm"><div class="tool-empty">Select an operation on the left.</div></div>
+        <div class="tool-form" id="toolForm"><div class="tool-empty" data-i18n>Select an operation on the left.</div></div>
       </div>
     </div>
   </div>
@@ -361,11 +372,11 @@
   <div class="modal-overlay hidden" id="attrModal">
     <div class="modal modal-lg">
       <div class="modal-head">
-        <span class="modal-title" id="attrTitle">Attribute table</span>
+        <span class="modal-title" id="attrTitle" data-i18n>Attribute table</span>
         <button class="modal-close" id="attrClose">✕</button>
       </div>
       <div class="attr-toolbar">
-        <input class="text-input" id="attrFilter" placeholder="Query — filter rows by any field…" spellcheck="false" />
+        <input class="text-input" id="attrFilter" placeholder="Query — filter rows by any field…" spellcheck="false" data-i18n-attr="placeholder" />
         <span class="attr-count" id="attrCount"></span>
       </div>
       <div class="attr-table-wrap"><table class="attr-table" id="attrTable"></table></div>
@@ -376,20 +387,20 @@
   <div class="modal-overlay hidden" id="setModal">
     <div class="modal modal-lg">
       <div class="modal-head">
-        <span class="modal-title">Settings</span>
+        <span class="modal-title" data-i18n>Settings</span>
         <button class="modal-close" id="setClose">✕</button>
       </div>
       <div class="set-tabs">
-        <button class="set-tab active" data-pane="keys">API keys</button>
-        <button class="set-tab" data-pane="models">Models</button>
-        <button class="set-tab" data-pane="local">Local models</button>
-        <button class="set-tab" data-pane="map">Map</button>
-        <button class="set-tab" data-pane="skills">Skills</button>
-        <button class="set-tab" data-pane="memory">Memory</button>
+        <button class="set-tab active" data-pane="keys" data-i18n>API keys</button>
+        <button class="set-tab" data-pane="models" data-i18n>Models</button>
+        <button class="set-tab" data-pane="local" data-i18n>Local models</button>
+        <button class="set-tab" data-pane="map" data-i18n>Map</button>
+        <button class="set-tab" data-pane="skills" data-i18n>Skills</button>
+        <button class="set-tab" data-pane="memory" data-i18n>Memory</button>
       </div>
 
       <div class="set-pane" id="paneKeys">
-        <div class="modal-sub">
+        <div class="modal-sub" data-i18n>
           Keys are stored on the server in <code id="setPath">…</code> (file mode 600) and
           survive container rebuilds. They are never sent back to this page — only a mask is.
         </div>
@@ -397,47 +408,47 @@
       </div>
 
       <div class="set-pane hidden" id="paneModels">
-        <div class="modal-sub">
+        <div class="modal-sub" data-i18n>
           Only enabled models with a configured key appear in the run selector.
           Any OpenAI-compatible endpoint works — pick the <b>Custom</b> provider and give its base URL.
         </div>
         <div class="model-list" id="modelList"></div>
 
         <div class="model-discover">
-          <div class="ma-title">What your providers are serving right now</div>
+          <div class="ma-title" data-i18n>What your providers are serving right now</div>
           <div class="disc-bar">
             <select class="model-select" id="discProvider"></select>
-            <button class="mini-btn primary" id="discFetch">Fetch model list</button>
+            <button class="mini-btn primary" id="discFetch" data-i18n>Fetch model list</button>
             <span class="tf-status" id="discStatus"></span>
           </div>
           <div class="disc-list" id="discList"></div>
         </div>
 
         <div class="model-add" id="modelAdd">
-          <div class="ma-title">Add / edit a model</div>
+          <div class="ma-title" data-i18n>Add / edit a model</div>
           <div class="ma-grid">
-            <label>Id<input class="text-input" id="maId" placeholder="qwen-max" /></label>
-            <label>Display name<input class="text-input" id="maDisplay" placeholder="Qwen Max" /></label>
-            <label>Provider<select class="model-select" id="maProvider"></select></label>
-            <label>API model name<input class="text-input" id="maModelName" placeholder="qwen-max-2025-01-25" /></label>
-            <label>Base URL <span class="ma-hint">(custom provider only)</span><input class="text-input" id="maBaseUrl" placeholder="https://host/v1" /></label>
-            <label>Max rounds<input class="text-input" id="maRounds" type="number" value="50" /></label>
-            <label>Max tokens<input class="text-input" id="maTokens" type="number" value="4096" /></label>
-            <label>Cost in / out per 1M
+            <label><span data-i18n>Id</span><input class="text-input" id="maId" placeholder="qwen-max" /></label>
+            <label><span data-i18n>Display name</span><input class="text-input" id="maDisplay" placeholder="Qwen Max" /></label>
+            <label><span data-i18n>Provider</span><select class="model-select" id="maProvider"></select></label>
+            <label><span data-i18n>API model name</span><input class="text-input" id="maModelName" placeholder="qwen-max-2025-01-25" /></label>
+            <label><span data-i18n>Base URL</span> <span class="ma-hint">(custom provider only)</span><input class="text-input" id="maBaseUrl" placeholder="https://host/v1" /></label>
+            <label><span data-i18n>Max rounds</span><input class="text-input" id="maRounds" type="number" value="50" /></label>
+            <label><span data-i18n>Max tokens</span><input class="text-input" id="maTokens" type="number" value="4096" /></label>
+            <label><span data-i18n>Cost in / out per 1M</span>
               <span class="ma-pair"><input class="text-input" id="maCostIn" type="number" step="0.01" value="0" /><input class="text-input" id="maCostOut" type="number" step="0.01" value="0" /></span>
             </label>
           </div>
           <div class="ma-actions">
             <span class="tf-status" id="maStatus"></span>
             <span class="ca-spacer"></span>
-            <button class="reset-btn" id="maReset"><span>Clear form</span></button>
-            <button class="primary-btn" id="maSave"><span>Save model</span></button>
+            <button class="reset-btn" id="maReset"><span data-i18n>Clear form</span></button>
+            <button class="primary-btn" id="maSave"><span data-i18n>Save model</span></button>
           </div>
         </div>
       </div>
 
       <div class="set-pane hidden" id="paneLocal">
-        <div class="modal-sub">
+        <div class="modal-sub" data-i18n>
           A model served on this computer — Ollama, LM Studio, vLLM — keeps the whole
           analysis here: nothing is sent to a provider, nothing is billed. Small models plan
           multi-step work less reliably than the hosted flagships; the ones recommended below
@@ -445,56 +456,56 @@
           a run needs at least <span id="localMinCtx">8,192</span> tokens, or the server
           silently drops the instructions off the front of the prompt.
         </div>
-        <div class="ma-title">Server</div>
+        <div class="ma-title" data-i18n>Server</div>
         <div class="disc-bar">
           <select class="model-select" id="localKind"></select>
           <input class="text-input" id="localUrl" placeholder="http://localhost:11434/v1" spellcheck="false" />
-          <button class="mini-btn primary" id="localConnect">Connect</button>
-          <a class="prov-docs" id="localDocs" target="_blank" rel="noopener" hidden>install ↗</a>
+          <button class="mini-btn primary" id="localConnect" data-i18n>Connect</button>
+          <a class="prov-docs" id="localDocs" target="_blank" rel="noopener" hidden data-i18n>install ↗</a>
         </div>
         <div class="tf-status" id="localStatus"></div>
         <div class="local-advice hidden" id="localAdvice"></div>
         <div class="local-models" id="localModels"></div>
-        <div class="ma-title">Recommended models</div>
+        <div class="ma-title" data-i18n>Recommended models</div>
         <div class="local-reco" id="localReco"></div>
       </div>
 
       <div class="set-pane hidden" id="paneMap">
-        <div class="modal-sub">
+        <div class="modal-sub" data-i18n>
           The map behind your data. Tiles are fetched by GISclaw, not by this page — a key stays
           on this computer, and every tile you have looked at is kept in the data folder, so the
           area stays available offline. Continents, borders and lakes are always drawn from a
           built-in offline layer, whatever else loads.
         </div>
         <div class="ma-grid">
-          <label>Source<select class="model-select" id="bmProvider"></select></label>
-          <label id="bmKeyRow">Key
-            <input class="text-input" id="bmKey" type="password" autocomplete="off" spellcheck="false" placeholder="paste the provider's key" />
+          <label><span data-i18n>Source</span><select class="model-select" id="bmProvider"></select></label>
+          <label id="bmKeyRow"><span data-i18n>Key</span>
+            <input class="text-input" id="bmKey" type="password" autocomplete="off" spellcheck="false" placeholder="paste the provider's key" data-i18n-attr="placeholder" />
           </label>
-          <label id="bmUrlRow">Tile template
+          <label id="bmUrlRow"><span data-i18n>Tile template</span>
             <input class="text-input" id="bmUrl" spellcheck="false" placeholder="https://host/{z}/{x}/{y}.png?key={key}" />
           </label>
-          <label id="bmAttrRow">Attribution
-            <input class="text-input" id="bmAttr" placeholder="© whoever made the map" />
+          <label id="bmAttrRow"><span data-i18n>Attribution</span>
+            <input class="text-input" id="bmAttr" placeholder="© whoever made the map" data-i18n-attr="placeholder" />
           </label>
-          <label id="bmFileRow">MBTiles file
+          <label id="bmFileRow"><span data-i18n>MBTiles file</span>
             <input class="text-input" id="bmFile" spellcheck="false" placeholder="/path/to/basemap.mbtiles" />
           </label>
         </div>
         <div class="prov-hint" id="bmHint"></div>
-        <a class="prov-docs" id="bmDocs" target="_blank" rel="noopener" hidden>get a key ↗</a>
+        <a class="prov-docs" id="bmDocs" target="_blank" rel="noopener" hidden data-i18n>get a key ↗</a>
         <label class="mem-toggle"><input type="checkbox" id="bmCache" checked />
-          <span>Keep the tiles I have looked at, for offline use</span></label>
+          <span data-i18n>Keep the tiles I have looked at, for offline use</span></label>
         <div class="ma-actions">
           <span class="tf-status" id="bmStatus"></span>
           <span class="ca-spacer"></span>
-          <button class="reset-btn" id="bmClear"><span>Clear tile cache</span></button>
-          <button class="primary-btn" id="bmSave"><span>Apply</span></button>
+          <button class="reset-btn" id="bmClear"><span data-i18n>Clear tile cache</span></button>
+          <button class="primary-btn" id="bmSave"><span data-i18n>Apply</span></button>
         </div>
       </div>
 
       <div class="set-pane hidden" id="paneSkills">
-        <div class="modal-sub">
+        <div class="modal-sub" data-i18n>
           A skill is a <b>directory bundle</b> — <code>SKILL.md</code> (a short router) plus
           <code>references/</code>, <code>assets/</code>, <code>manifest.yaml</code>. Same shape as
           Claude Code skills, so bundles are interchangeable. Only the one-line description is
@@ -502,27 +513,27 @@
         </div>
         <div class="skill-roots" id="skillRoots"></div>
         <label class="mem-toggle"><input type="checkbox" id="skillAuto" />
-          <span>Auto-load the best-matching skill for each task
+          <span data-i18n>Auto-load the best-matching skill for each task
             <i>(models rarely open one themselves)</i></span></label>
         <div class="skill-list" id="skillList"></div>
         <div class="skill-foot">
           <span class="tf-status" id="skillStatus"></span>
           <span class="ca-spacer"></span>
           <input class="text-input" id="skillNewName" placeholder="new-skill-name" />
-          <button class="mini-btn primary" id="skillNew">New</button>
-          <button class="mini-btn" id="skillImportZip">Import .zip</button>
+          <button class="mini-btn primary" id="skillNew" data-i18n>New</button>
+          <button class="mini-btn" id="skillImportZip" data-i18n>Import .zip</button>
           <input type="file" id="skillZipFile" accept=".zip" hidden />
         </div>
         <div class="skill-foot">
-          <input class="text-input" id="skillImportPath" placeholder="…or a folder path under the workspace, e.g. _incoming/my-skill" />
-          <button class="mini-btn" id="skillImportGo">Import folder</button>
+          <input class="text-input" id="skillImportPath" placeholder="…or a folder path under the workspace, e.g. _incoming/my-skill" data-i18n-attr="placeholder" />
+          <button class="mini-btn" id="skillImportGo" data-i18n>Import folder</button>
         </div>
         <div class="skill-editor hidden" id="skillEditor">
           <div class="se-head">
             <span class="se-title" id="seTitle">—</span>
             <span class="ca-spacer"></span>
-            <button class="mini-btn" id="seClose">Close</button>
-            <button class="mini-btn primary" id="seSave">Save</button>
+            <button class="mini-btn" id="seClose" data-i18n>Close</button>
+            <button class="mini-btn primary" id="seSave" data-i18n>Save</button>
           </div>
           <div class="se-note" id="seNote"></div>
           <div class="se-files" id="seFiles"></div>
@@ -532,20 +543,20 @@
       </div>
 
       <div class="set-pane hidden" id="paneMemory">
-        <div class="modal-sub">
+        <div class="modal-sub" data-i18n>
           Standing preferences applied to <b>every</b> project — cartography, deliverable
           conventions, house CRS. Injected into the agent's system prompt at the start of each run.
           Stored in <code id="memPath">…</code>.
         </div>
-        <label class="mem-toggle"><input type="checkbox" id="memEnabled" /> <span>Apply memory to runs</span></label>
+        <label class="mem-toggle"><input type="checkbox" id="memEnabled" /> <span data-i18n>Apply memory to runs</span></label>
         <label class="mem-toggle"><input type="checkbox" id="viewerFollow" />
-          <span>Follow the agent between Map, Code and Result while it works
+          <span data-i18n>Follow the agent between Map, Code and Result while it works
             <i>(off keeps the tab you chose)</i></span></label>
         <textarea id="memText" class="mem-text" spellcheck="false"></textarea>
         <div class="modal-foot">
           <span class="tf-status" id="memStatus"></span>
           <span class="ca-spacer"></span>
-          <button class="primary-btn" id="memSave"><span>Save memory</span></button>
+          <button class="primary-btn" id="memSave"><span data-i18n>Save memory</span></button>
         </div>
       </div>
     </div>
@@ -555,21 +566,22 @@
   <div class="modal-overlay hidden" id="journalModal">
     <div class="modal modal-lg">
       <div class="modal-head">
-        <span class="modal-title" id="journalTitle">Journal</span>
+        <span class="modal-title" id="journalTitle" data-i18n>Journal</span>
         <button class="modal-close" id="journalClose">✕</button>
       </div>
-      <div class="modal-sub">
+      <div class="modal-sub" data-i18n>
         Append-only record of this project: every run, what was asked, what it produced.
         Lives at <code id="journalPath">…</code> — readable without this app.
       </div>
       <div class="journal-body" id="journalBody"></div>
       <div class="modal-foot">
         <span class="ca-spacer"></span>
-        <button class="reset-btn" id="journalNote"><span>Add a note</span></button>
+        <button class="reset-btn" id="journalNote"><span data-i18n>Add a note</span></button>
       </div>
     </div>
   </div>
 
+  <script src="i18n.js?v=__V__"></script>
   <script src="app.js?v=__V__"></script>
 </body>
 </html>

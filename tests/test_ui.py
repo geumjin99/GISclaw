@@ -26,8 +26,13 @@ def browser():
         d = webdriver.Chrome(options=opts)
     except Exception as e:                          # no Chrome on this machine
         pytest.skip(f"Chrome not available: {e}")
+    global _browser_for_logs
+    _browser_for_logs = d
     yield d
     d.quit()
+
+
+_browser_for_logs = None
 
 
 def _wait(cond, secs=25, what=""):
@@ -39,11 +44,25 @@ def _wait(cond, secs=25, what=""):
         except Exception:
             pass
         time.sleep(0.2)
-    raise AssertionError(f"timeout waiting for {what}")
+    console = ""
+    if _browser_for_logs is not None:
+        try:
+            console = "\n".join(e["message"][:300] for e in _browser_for_logs.get_log("browser") if e["level"] == "SEVERE")
+            console += "\nstatus: " + _browser_for_logs.find_element(By.ID, "statusText").text
+            console += "\nchat tail: " + _browser_for_logs.execute_script("return document.getElementById('chatScroll').innerText")[-600:]
+        except Exception:
+            pass
+    raise AssertionError(f"timeout waiting for {what}\nbrowser console:\n{console}")
+
+
+def _english(client):
+    """The page follows the machine's locale unless a language is stored; tests read English."""
+    client.post("/api/settings/ui", json={"language": "en"})
 
 
 def test_run_stop_rejoin_replay(client, stub, browser):
     d = browser
+    _english(client)
     text = lambda: d.execute_script("return document.getElementById('chatScroll').innerText")
     status = lambda: d.find_element(By.ID, "statusText").text
     running = lambda: "running" in d.find_element(By.CSS_SELECTOR, ".status").get_attribute("class")
@@ -116,6 +135,7 @@ def test_run_stop_rejoin_replay(client, stub, browser):
 
 def test_local_models_pane(client, browser, ollama):
     d = browser
+    _english(client)
     d.get(str(client.base_url) + "/")
     _wait(lambda: d.find_element(By.ID, "catalog"), what="page")
     # Settings → Local models
@@ -147,6 +167,7 @@ def test_local_models_pane(client, browser, ollama):
 
 def test_map_pane(client, browser):
     d = browser
+    _english(client)
     d.get(str(client.base_url) + "/")
     _wait(lambda: d.find_element(By.ID, "catalog"), what="page")
     # the offline reference layer is drawn regardless of any provider
@@ -163,6 +184,40 @@ def test_map_pane(client, browser):
     d.execute_script("const s = document.getElementById('bmProvider'); s.value = 'esri-gray'; s.dispatchEvent(new Event('change'))")
     d.find_element(By.ID, "bmSave").click()
     _wait(lambda: "Esri Light Gray" in d.find_element(By.ID, "bmStatus").text, what="esri back")
+    errors = [e["message"] for e in d.get_log("browser")
+              if e["level"] == "SEVERE" and "favicon" not in e["message"]]
+    assert errors == [], errors
+
+
+def test_language_menu(client, browser):
+    d = browser
+    _english(client)
+    d.get(str(client.base_url) + "/")
+    _wait(lambda: d.find_element(By.ID, "catalog"), what="page")
+    menu_btn = lambda: d.find_element(By.CSS_SELECTOR, "[data-menu=project] .menu-btn").text
+    assert menu_btn() == "Project"
+    assert d.find_element(By.ID, "langCode").text == "EN"
+    # switch to Chinese from the language menu: static text, generated text, <html lang>
+    d.execute_script("document.querySelector('[data-menu=lang] .menu-btn').click()")
+    d.execute_script("document.querySelector('[data-lang=zh]').click()")
+    _wait(lambda: menu_btn() == "项目", what="chinese menu")
+    assert d.find_element(By.ID, "langCode").text == "中"
+    assert d.find_element(By.ID, "statusText").text == "空闲"
+    assert "底图" in d.find_element(By.ID, "legendLayers").text
+    assert d.execute_script("return document.documentElement.lang") == "zh-CN"
+    assert d.find_element(By.ID, "promptInput").get_attribute("placeholder").startswith("例如")
+    # the choice is stored on the server and survives a reload
+    assert client.get("/api/settings").json()["language"] == "zh"
+    d.refresh()
+    _wait(lambda: menu_btn() == "项目", what="chinese after reload")
+    # Korean, then back to English
+    d.execute_script("document.querySelector('[data-menu=lang] .menu-btn').click()")
+    d.execute_script("document.querySelector('[data-lang=ko]').click()")
+    _wait(lambda: menu_btn() == "프로젝트", what="korean menu")
+    assert d.find_element(By.CSS_SELECTOR, "[data-menu=settings] .menu-btn").text == "설정"
+    d.execute_script("document.querySelector('[data-menu=lang] .menu-btn').click()")
+    d.execute_script("document.querySelector('[data-lang=en]').click()")
+    _wait(lambda: menu_btn() == "Project", what="english again")
     errors = [e["message"] for e in d.get_log("browser")
               if e["level"] == "SEVERE" and "favicon" not in e["message"]]
     assert errors == [], errors

@@ -88,6 +88,13 @@ matplotlib, seaborn, sklearn, libpysal, esda, momepy, rasterstats, mapclassify,
 networkx, osmnx, h3, openpyxl
 {skills_block}{catalog_block}{data_block}{memory_block}{context_block}"""
 
+# The interface language, when it is not English. The task itself may be in any
+# language; the closing summary is what the person reads in the interface.
+LANGUAGE_BLOCK = """The user's interface language is {language}. Write the summary you give to
+`finish` in {language} unless the task itself is written in another language.
+
+"""
+
 # Level 0 — bodies of `always: true` skills. Standing rules, injected every run.
 SKILLS_BLOCK = """
 ## Operating skills
@@ -326,8 +333,10 @@ class RunBusy(RuntimeError):
 class Run:
     """One analysis run: its identity, its stop flag, and everything it emitted."""
 
-    def __init__(self, run_id: str, pid: str, model_key: str, instruction: str, run_dir: str):
+    def __init__(self, run_id: str, pid: str, model_key: str, instruction: str, run_dir: str,
+                 language: str = "en"):
         self.id = run_id
+        self.language = language if language in LANGUAGE_NAMES else "en"
         self.pid = pid
         self.model = model_key
         self.instruction = instruction
@@ -408,7 +417,10 @@ def cancel_run(run_id: str) -> bool:
     return True
 
 
-def start_run(pid: str, model_key: str, instruction: str) -> Run:
+LANGUAGE_NAMES = {"en": "English", "zh": "Chinese (Simplified)", "ko": "Korean"}
+
+
+def start_run(pid: str, model_key: str, instruction: str, language: str = "en") -> Run:
     """Validate, register, and start a run on its own thread."""
     global _active
     cfg = STORE.model_config(model_key)
@@ -425,7 +437,7 @@ def start_run(pid: str, model_key: str, instruction: str) -> Run:
         if _active is not None and not _active.done:
             raise RunBusy("A run is already in progress. Stop it or wait for it to finish.")
         run_dir = paths.new_run_dir(pdir)
-        run = Run(os.path.basename(run_dir), pid, model_key, instruction, run_dir)
+        run = Run(os.path.basename(run_dir), pid, model_key, instruction, run_dir, language=language)
         _RUNS[run.id] = run
         _active = run
         # Keep a few finished runs around so a reloaded page can still replay
@@ -463,7 +475,8 @@ def _run_agent(run: Run, cfg: dict):
         recorder.log(f"model={model_key} instruction={instruction!r}")
         log.info(f"[{pid}] run {run.id} model={model_key}")
 
-        run.emit({"type": "status", "content": f"Initializing {cfg['display']}...", "run_id": run.id})
+        run.emit({"type": "status", "code": "Initializing {model}...", "params": {"model": cfg["display"]},
+                  "content": f"Initializing {cfg['display']}...", "run_id": run.id})
 
         llm = guard_engine(init_llm(cfg))
 
@@ -472,7 +485,7 @@ def _run_agent(run: Run, cfg: dict):
         # "what did you do?" forces it to redo work and write a placeholder just
         # to be allowed to stop.
         gate_context = reflect.recent_log(pdir) or journal.build_context(pdir, manifest)
-        verdict = reflect.classify_request(llm, instruction, gate_context)
+        verdict = reflect.classify_request(llm, instruction, gate_context, language=LANGUAGE_NAMES[run.language])
         if verdict["mode"] != "analysis":
             answer = verdict.get("answer", "")
             recorder.log(f"intent={verdict['mode']} answered without running the agent")
@@ -524,15 +537,19 @@ def _run_agent(run: Run, cfg: dict):
                 body += f"\n\n--- {matched['name']}/{frag['path']} ---\n\n{frag['text']}"
             skills_block += SKILL_AUTOLOAD_BLOCK.format(name=matched["name"], body=body)
             log.info(f"[{pid}] skill auto-loaded: {matched['name']} (score {matched['match_score']})")
-            run.emit({"type": "status", "content": f"Loaded skill: {matched['name']}"})
+            run.emit({"type": "status", "code": "Loaded skill: {name}", "params": {"name": matched["name"]},
+                      "content": f"Loaded skill: {matched['name']}"})
 
         catalog_text = SKILLS.build_catalog(overrides, exclude=matched["name"] if matched else "")
         catalog_block = SKILL_CATALOG_BLOCK.format(catalog=catalog_text) if catalog_text else ""
 
         # The tool descriptions are only known once the agent has built its
         # toolkit, so hand it a builder rather than a finished prompt.
+        language_block = ("" if run.language == "en" else LANGUAGE_BLOCK.format(
+            language=LANGUAGE_NAMES[run.language]))
+
         def build_prompt(tool_descriptions: str) -> str:
-            return SYSTEM_PROMPT.format(
+            return language_block + SYSTEM_PROMPT.format(
                 tool_descriptions=tool_descriptions,
                 skill_rule=SKILL_RULE if catalog_text else "",
                 skills_block=skills_block,
@@ -591,7 +608,7 @@ def _run_agent(run: Run, cfg: dict):
                     run.emit({"type": "result", "run_id": run.id, "filename": fn,
                               "url": f"/api/projects/{pid}/runfile?run={run.id}&path={fn}"})
 
-        run.emit({"type": "status", "content": "Agent running...", "run_id": run.id})
+        run.emit({"type": "status", "code": "Agent running...", "content": "Agent running...", "run_id": run.id})
         t0 = time.time()
         result = agent.run(instruction=instruction, data_dir=data_dir,
                            work_dir=run_dir, on_step=on_step,
@@ -631,9 +648,10 @@ def _run_agent(run: Run, cfg: dict):
             (s.get("observation", "") for s in reversed(steps_log)
              if s.get("action") == "finish"), ""))
         if not final_text and steps_log:
-            run.emit({"type": "status", "content": "Writing the closing note…"})
+            run.emit({"type": "status", "code": "Writing the closing note…", "content": "Writing the closing note…"})
             try:
-                final_text = reflect.closing_note(llm, instruction, summary, steps_log)
+                final_text = reflect.closing_note(llm, instruction, summary, steps_log,
+                                                  language=LANGUAGE_NAMES[run.language])
             except Exception as e:
                 log.warning(f"closing note failed: {e}")
         summary["final_summary"] = final_text
@@ -649,9 +667,10 @@ def _run_agent(run: Run, cfg: dict):
         # session reads instead of the whole transcript.
         if STORE.compact_log() and not run.stop_requested():
             try:
-                run.emit({"type": "status", "content": "Writing project log…"})
+                run.emit({"type": "status", "code": "Writing project log…", "content": "Writing project log…"})
                 digest = reflect.compact_run(llm, pdir, project_name,
-                                             dict(entry, steps=steps_log), steps_log)
+                                             dict(entry, steps=steps_log), steps_log,
+                                             language=LANGUAGE_NAMES[run.language])
                 if digest:
                     run.emit({"type": "log", "content": digest})
             except Exception as e:
@@ -738,6 +757,9 @@ def _record_stopped(run: Run, pdir: str, cfg: dict, outputs: list, rounds: int,
             log.warning(f"journal write failed: {e}")
     run.success = False
     run.emit({"type": "summary", "run_id": run.id, "content": text,
+              "code": "Stopped by request after {n} round(s).",
+              "code2": " {k} file(s) had been produced by then." if outputs else "",
+              "params": {"n": rounds, "k": len(outputs)},
               "outputs": outputs, "success": False, "stopped": True})
     run.emit({"type": "done", "run_id": run.id, "success": False, "stopped": True,
               "output_files": outputs, "rounds": rounds, "self_corrections": 0,

@@ -544,6 +544,15 @@ class SettingsStore:
             del data["skills"][name]
             self.save(data)
 
+    def language(self) -> str:
+        """Interface language: en, zh or ko. '' means 'not chosen yet'."""
+        return str(self.load().get("language") or "")
+
+    def set_language(self, code: str):
+        data = self.load()
+        data["language"] = code if code in ("en", "zh", "ko") else ""
+        self.save(data)
+
     def memory_enabled(self) -> bool:
         return bool(self.load().get("memory_enabled", True))
 

@@ -93,6 +93,8 @@ less reliably than the hosted flagships, so read their work closely.
 
 Then create a project, attach your data, and type what you want.
 
+**Languages.** The interface is available in English, 中文 and 한국어 — the language button at the right of the menu bar switches, and the choice is remembered.
+
 **Desktop application (beta), no Docker.** Download the build for your
 system from the Releases page — a `.dmg` for macOS (Apple Silicon), a setup
 `.exe` for Windows — and install it like any other program. It opens in its

@@ -32,7 +32,7 @@
 | ID | 内容 | 状态 |
 |---|---|---|
 | E0 | 发版基础：tag `v1.0.0`、GitHub Release、`CHANGELOG.md`、`/api/version` 与 About 显示版本 | ✅ 2026-09-01 |
-| E1 | 三语界面（en / zh / ko）：静态字典 + `data-i18n`、语言设置持久化、后端消息「码 + 参数」、agent 收尾 / LOG 跟随界面语言 | ⬜ ADR-002 |
+| E1 | 三语界面（en / zh / ko）：静态字典 + `data-i18n`、语言设置持久化、后端消息「码 + 参数」、agent 收尾 / LOG 跟随界面语言 | ✅ 2026-09-01（ADR-002 按提案实施） |
 | E2 | 无 Docker 安装：`install.sh` / `install.ps1` 用 uv 建 Python 3.11 环境（PyPI 二进制 wheel），`desktop/launcher.py` 开原生窗口，macOS 生成 `GISclaw.app` | 🟡 Linux 上验证通过（全测试套件）；mac / Windows 待实机 |
 | E3 | **原生安装包**：uv 管理的可搬迁 Python + 全部 wheel 装进包内 + pywebview 窗口；macOS `.app` + `.dmg`（ad-hoc 签名），Windows Inno Setup `.exe`；`.github/workflows/desktop.yml` 出包并发 Release | 🟡 脚本在 Linux 上 dry-run 通过；等 Actions 实跑 + 实机 |
 | E4 | 原生模式的安全边界：DISCLAIMER 与 README 说明「原生模式没有容器隔离」；沙箱工作目录限定、UI 提示 | 🟡 文档已加（英文）；限定与提示待做 |
@@ -54,7 +54,7 @@
 
 | ID | 标题 | 状态 |
 |---|---|---|
-| ADR-002 | 界面多语言：静态字典 + `data-i18n`，后端消息「码 + 参数」，agent 文本跟随界面语言 | 提案 |
+| ADR-002 | 界面多语言：静态字典 + `data-i18n`，后端消息「码 + 参数」，agent 文本跟随界面语言 | 决定 |
 | ADR-003 | 原生分发：完整 Python 环境随包 + 只冻结启动器 | 提案 |
 
 ## 5. 下一步
@@ -65,7 +65,7 @@
 - [x] 开 `v2` 分支；E7 代码审视与加固（2026-09-01）
 - [ ] 决定 B1；`release` 只接 v1.0.x 修复
 - [ ] 确认 ADR-002 / ADR-003，状态改「决定」
-- [ ] E1 第一步：抽取 `index.html` 与 `app.js` 的界面字符串为 `app/web/i18n/en.json`，再生成 zh / ko
+- [x] E1：三语界面，字典在 `app/web/i18n.js`（2026-09-01）
 - [x] E4：DISCLAIMER 加「原生模式没有容器隔离」（README 英文段已加；中 / 韩段随 v2 文档更新）
 - [x] 验证 wheel 路线：Linux 上 `install.sh` → 715 MB venv，测试套件全过（2026-09-01）
 - [ ] mac 实机：装 Release 里的 `.dmg`；看窗口是否出现、CJK 图标签、示例项目跑通、Local models 面板连本机 Ollama

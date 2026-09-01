@@ -156,3 +156,11 @@ def test_cross_site_requests_are_refused(client):
     r = client.post("/api/projects", json={"name": "Same Origin"},
                     headers={"Origin": base.rstrip("/")})
     assert r.status_code == 200
+
+
+def test_interface_language_setting(client):
+    assert client.get("/api/settings").json()["language"] in ("", "en", "zh", "ko")
+    assert client.post("/api/settings/ui", json={"language": "ko"}).json()["language"] == "ko"
+    assert client.get("/api/settings").json()["language"] == "ko"
+    assert client.post("/api/settings/ui", json={"language": "xx"}).json()["language"] == ""
+    client.post("/api/settings/ui", json={"language": "en"})

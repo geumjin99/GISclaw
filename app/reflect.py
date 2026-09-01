@@ -118,7 +118,12 @@ def _trace_digest(steps: list, cap: int = 24) -> str:
     return "\n".join(lines)
 
 
-def compact_run(llm, pdir: str, project_name: str, entry: dict, steps: list) -> str:
+def _lang_rule(language: str) -> str:
+    return f"\n- Write in {language}." if language and language != "English" else ""
+
+
+def compact_run(llm, pdir: str, project_name: str, entry: dict, steps: list,
+                language: str = "English") -> str:
     """Summarise one run and append it to LOG.md. Returns the digest text."""
     material = (
         f"Project: {project_name}\n"
@@ -130,7 +135,7 @@ def compact_run(llm, pdir: str, project_name: str, entry: dict, steps: list) -> 
         f"What the agent did, round by round:\n{_trace_digest(steps)}\n\n"
         f"Final summary the agent gave:\n{(entry.get('final_summary') or '(none)')[:2000]}\n"
     )
-    res = llm.generate(prompt=material, system_prompt=COMPACT_SYSTEM,
+    res = llm.generate(prompt=material, system_prompt=COMPACT_SYSTEM + _lang_rule(language),
                        user_message=material, max_tokens=700, stop=[])
     digest = (res.get("text") if isinstance(res, dict) else str(res)) or ""
     digest = digest.strip()
@@ -152,7 +157,7 @@ def compact_run(llm, pdir: str, project_name: str, entry: dict, steps: list) -> 
     return digest
 
 
-def closing_note(llm, instruction: str, entry: dict, steps: list) -> str:
+def closing_note(llm, instruction: str, entry: dict, steps: list, language: str = "English") -> str:
     """A summary for a run that ended without the agent writing one.
 
     Every run should end in words, not just a chip saying "25 rounds". When the
@@ -172,7 +177,10 @@ def closing_note(llm, instruction: str, entry: dict, steps: list) -> str:
     if last_error:
         material += f"\nThe last thing that failed:\n{last_error[:800]}\n"
     try:
-        res = llm.generate(prompt=material, system_prompt=CLOSING_SYSTEM,
+        system = CLOSING_SYSTEM if language in ("", "English") else \
+            CLOSING_SYSTEM.replace("- Write in the same language the user wrote their request in.",
+                                   f"- Write in {language}.")
+        res = llm.generate(prompt=material, system_prompt=system,
                            user_message=material, max_tokens=500, stop=[])
         text = (res.get("text") if isinstance(res, dict) else str(res)) or ""
     except Exception:
@@ -196,14 +204,17 @@ def recent_log(pdir: str, n_entries: int = 6, char_cap: int = 4000) -> str:
 
 
 # ---------------------------------------------------------------- intent gate
-def classify_request(llm, instruction: str, context: str) -> dict:
+def classify_request(llm, instruction: str, context: str, language: str = "English") -> dict:
     """Decide whether this message needs an analysis run. Fails open to analysis."""
     material = (
         f"Context about the current project:\n{context or '(no project history yet)'}\n\n"
         f"User's message:\n{instruction}\n"
     )
     try:
-        res = llm.generate(prompt=material, system_prompt=INTENT_SYSTEM,
+        system = INTENT_SYSTEM if language in ("", "English") else \
+            INTENT_SYSTEM.replace("Answer in the same language the user wrote in.",
+                                  f"Answer in {language} unless the user wrote in another language.")
+        res = llm.generate(prompt=material, system_prompt=system,
                            user_message=material, max_tokens=1200, stop=[])
         text = (res.get("text") if isinstance(res, dict) else str(res)) or ""
     except Exception:

@@ -25,6 +25,7 @@
   const $  = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const t = (k, v) => window.I18N.t(k, v);
   const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
@@ -217,7 +218,7 @@
     if (shownLayers[key]) { map.removeLayer(shownLayers[key].layer); delete shownLayers[key]; renderLegend(); return; }
     const url = `/api/projects/${state.project.id}/file?where=${where}&path=${encodeURIComponent(path)}`;
     let gj;
-    try { gj = await jget(url); } catch (e) { addMsg({ kind: 'error', text: `Could not load ${name}` }); return; }
+    try { gj = await jget(url); } catch (e) { addMsg({ kind: 'error', text: t('Could not load {name}', { name }) }); return; }
     if (gj.error) { addMsg({ kind: 'error', text: `${name}: ${gj.error}` }); return; }
     if (!gj || gj.type !== 'FeatureCollection' && gj.type !== 'Feature') {
       // Plain JSON that only looked like a layer by its extension.
@@ -228,7 +229,7 @@
     const color = LAYER_COLORS[colorIdx++ % LAYER_COLORS.length];
     let layer;
     try { layer = buildGeoLayer(gj, color); layer.addTo(map); }
-    catch (e) { addMsg({ kind: 'error', text: `${name}: not a valid GeoJSON layer.` }); return; }
+    catch (e) { addMsg({ kind: 'error', text: t('{name}: not a valid GeoJSON layer.', { name }) }); return; }
     shownLayers[key] = { layer, color, gj, kind: 'vector', fillOpacity: 0.22, visible: true };
     try { map.fitBounds(layer.getBounds(), { padding: [24, 24] }); } catch (e) {}
     renderLegend();
@@ -240,7 +241,7 @@
     if (shownLayers[key]) { map.removeLayer(shownLayers[key].layer); delete shownLayers[key]; }
     let pl;
     try { pl = await jget(overlayUrl); } catch (e) { return; }
-    if (!pl || pl.error || !pl.bounds) { addMsg({ kind: 'error', text: `${name}: ${pl && pl.error || 'overlay failed'}` }); return; }
+    if (!pl || pl.error || !pl.bounds) { addMsg({ kind: 'error', text: `${name}: ${pl && pl.error || t('overlay failed')}` }); return; }
     const b = pl.bounds;
     const layer = L.imageOverlay(pl.image, [[b.south, b.west], [b.north, b.east]], { opacity: 0.85 });
     layer.addTo(map);
@@ -276,8 +277,8 @@
     host.innerHTML = '';
     const base = document.createElement('div');
     base.className = 'legend-layer';
-    const bmName = basemapInfo ? (basemapInfo.tiles && basemapInfo.ready ? basemapInfo.display : 'offline reference') : '…';
-    base.innerHTML = `<div class="legend-layer-head"><span class="legend-layer-name">Basemap</span><span class="legend-layer-meta">${esc(bmName)}</span></div>`;
+    const bmName = basemapInfo ? (basemapInfo.tiles && basemapInfo.ready ? basemapInfo.display : t('offline reference')) : '…';
+    base.innerHTML = `<div class="legend-layer-head"><span class="legend-layer-name">${t('Basemap')}</span><span class="legend-layer-meta">${esc(bmName)}</span></div>`;
     host.appendChild(base);
 
     const entries = Object.entries(shownLayers);
@@ -288,10 +289,10 @@
       div.title = name;
       div.innerHTML =
         `<div class="legend-layer-head">`
-        + `<span class="lyr-vis" title="Toggle visibility">${svgIcon('eye', 'ctx-ic')}</span>`
+        + `<span class="lyr-vis" title="${esc(t('Toggle visibility'))}">${svgIcon('eye', 'ctx-ic')}</span>`
         + `<span class="legend-layer-name">${esc(layerLabel(name))}</span>`
-        + `<span class="legend-layer-meta">${kind}</span></div>`
-        + `<div class="legend-chips"><span class="chip"><i style="background:${o.color}"></i>${kind}</span></div>`;
+        + `<span class="legend-layer-meta">${t(kind)}</span></div>`
+        + `<div class="legend-chips"><span class="chip"><i style="background:${o.color}"></i>${t(kind)}</span></div>`;
       div.querySelector('.lyr-vis').addEventListener('click', ev => { ev.stopPropagation(); toggleLayerVisibility(name); });
       div.addEventListener('contextmenu', ev => { ev.preventDefault(); ev.stopPropagation(); openLayerMenu(name, ev.clientX, ev.clientY); });
       host.appendChild(div);
@@ -299,7 +300,7 @@
     if (entries.length) {
       const hint = document.createElement('div');
       hint.className = 'legend-hint-rc';
-      hint.textContent = 'Right-click a layer for symbology, attribute table…';
+      hint.textContent = t('Right-click a layer for symbology, attribute table…');
       host.appendChild(hint);
     }
   }
@@ -325,15 +326,15 @@
   function openLayerMenu(name, x, y) {
     const o = shownLayers[name]; if (!o) return;
     showContextMenu(x, y, [
-      { label: o.visible === false ? 'Show layer' : 'Hide layer', icon: 'eye', action: () => toggleLayerVisibility(name) },
-      { label: 'Zoom to layer', icon: 'target', action: () => zoomToLayer(o) },
+      { label: t(o.visible === false ? 'Show layer' : 'Hide layer'), icon: 'eye', action: () => toggleLayerVisibility(name) },
+      { label: t('Zoom to layer'), icon: 'target', action: () => zoomToLayer(o) },
       // "Fit to data" lives here rather than in a View menu — it is a layer
       // action, and you are already pointing at the layer panel.
-      { label: 'Fit to all layers', icon: 'fit', action: () => $('#btnFit').click() },
-      { label: 'Symbology…', icon: 'palette', action: () => openSymbology(name, x, y) },
-      { label: 'Attribute table', icon: 'table', disabled: o.kind !== 'vector' || !o.gj, action: () => openAttributeTable(name) },
+      { label: t('Fit to all layers'), icon: 'fit', action: () => $('#btnFit').click() },
+      { label: t('Symbology…'), icon: 'palette', action: () => openSymbology(name, x, y) },
+      { label: t('Attribute table'), icon: 'table', disabled: o.kind !== 'vector' || !o.gj, action: () => openAttributeTable(name) },
       { sep: true },
-      { label: 'Remove layer', icon: 'trash', danger: true, action: () => removeLayer(name) },
+      { label: t('Remove layer'), icon: 'trash', danger: true, action: () => removeLayer(name) },
     ]);
   }
 
@@ -369,11 +370,11 @@
     pop.className = 'symb-pop'; pop.id = 'symbPop';
     if (o.kind === 'raster') {
       pop.innerHTML = `<div class="symb-h">${esc(layerLabel(name))}</div>`
-        + `<div class="symb-row"><span>Opacity</span><input type="range" min="0" max="100" value="${Math.round((o.opacity ?? 0.85) * 100)}" id="symbOpacity"></div>`;
+        + `<div class="symb-row"><span>${t('Opacity')}</span><input type="range" min="0" max="100" value="${Math.round((o.opacity ?? 0.85) * 100)}" id="symbOpacity"></div>`;
     } else {
       pop.innerHTML = `<div class="symb-h">${esc(layerLabel(name))}</div>`
-        + `<div class="symb-row"><span>Color</span><input type="color" value="${o.color}" id="symbColor"></div>`
-        + `<div class="symb-row"><span>Fill opacity</span><input type="range" min="0" max="100" value="${Math.round((o.fillOpacity ?? 0.22) * 100)}" id="symbFill"></div>`;
+        + `<div class="symb-row"><span>${t('Color')}</span><input type="color" value="${o.color}" id="symbColor"></div>`
+        + `<div class="symb-row"><span>${t('Fill opacity')}</span><input type="range" min="0" max="100" value="${Math.round((o.fillOpacity ?? 0.22) * 100)}" id="symbFill"></div>`;
     }
     pop.addEventListener('click', e => e.stopPropagation());
     document.body.appendChild(pop);
@@ -394,8 +395,8 @@
     const CAP = 2000;
     attrCols = [...new Set(feats.slice(0, 200).flatMap(f => Object.keys(f.properties || {})))];
     attrRows = feats.slice(0, CAP).map(f => f.properties || {});
-    $('#attrTitle').textContent = `${layerLabel(name)} — ${feats.length} feature${feats.length === 1 ? '' : 's'}`
-      + (feats.length > CAP ? ` (showing first ${CAP})` : '');
+    $('#attrTitle').textContent = t('{name} — {n} features', { name: layerLabel(name), n: feats.length })
+      + (feats.length > CAP ? ' ' + t('(showing first {n})', { n: CAP }) : '');
     $('#attrFilter').value = '';
     renderAttrTable('');
     $('#attrModal').classList.remove('hidden');
@@ -411,7 +412,7 @@
         return `<td title="${v}">${v}</td>`;
       }).join('')}</tr>`).join('')}</tbody>`;
     $('#attrTable').innerHTML = thead + tbody;
-    $('#attrCount').textContent = `${rows.length} row${rows.length === 1 ? '' : 's'}`;
+    $('#attrCount').textContent = t('{n} rows', { n: rows.length });
   }
   $('#attrClose').addEventListener('click', () => $('#attrModal').classList.add('hidden'));
   $('#attrModal').addEventListener('click', e => { if (e.target === $('#attrModal')) $('#attrModal').classList.add('hidden'); });
@@ -439,6 +440,7 @@
     });
   }
   function menuAct(act) {
+    if (!act) return;
     if (MENU_TRIG[act]) { const b = $(MENU_TRIG[act]); if (!b.disabled) b.click(); return; }
     // Settings is its own menu; each item opens its own pane directly.
     if (act.startsWith('set-')) { openSettings(act.slice(4)); return; }
@@ -491,38 +493,41 @@
   function openProjectMenu(pj, x, y) {
     const isActive = state.project && state.project.id === pj.id;
     showContextMenu(x, y, [
-      { label: 'Add data…', icon: 'box', action: async () => {
+      { label: t('＋ Add data…').replace(/^＋\s*/, ''), icon: 'box', action: async () => {
           if (!isActive) await selectProject(pj.id);
           openBrowse();
         } },
-      { label: 'Rename\u2026', icon: 'table',
+      { label: t('Rename…'), icon: 'table',
         disabled: state.running && isActive,
         action: () => openRename(pj) },
       { sep: true },
-      { label: 'Export as zip', icon: 'box',
+      { label: t('Export as zip'), icon: 'box',
         action: () => { window.location = `/api/projects/${pj.id}/export`; } },
-      { label: 'Archive\u2026', icon: 'layers',
+      { label: t('Archive…'), icon: 'layers',
         disabled: state.running && isActive,
         action: () => archiveProject(pj) },
-      { label: (isActive && !collapsed.has(pj.id)) ? 'Collapse' : 'Open', icon: 'layers',
+      { label: t((isActive && !collapsed.has(pj.id)) ? 'Collapse' : 'Open'), icon: 'layers',
         action: () => { isActive ? toggleProjectOpen(pj.id) : selectProject(pj.id); } },
       { sep: true },
-      { label: 'Journal…', icon: 'table', action: async () => {
+      { label: t('Journal…'), icon: 'table', action: async () => {
           if (!isActive) await selectProject(pj.id);
           openJournal();
         } },
       { sep: true },
-      { label: 'Delete project…', icon: 'trash', danger: true,
+      { label: t('Delete project…'), icon: 'trash', danger: true,
         disabled: state.running && isActive,
         action: () => deleteProject(pj) },
     ]);
   }
 
   async function loadViewerFollow() {
+    let lang = '';
     try {
       const s = await jget('/api/settings');
       state.viewerFollow = s.viewer_follow !== false;
+      lang = s.language || '';
     } catch (e) { state.viewerFollow = true; }
+    setLanguage(window.I18N.detect(lang), false);
   }
 
   async function loadProjects() {
@@ -538,9 +543,9 @@
       e.preventDefault();
       e.stopPropagation();
       showContextMenu(e.clientX, e.clientY, [
-        { label: 'Open', icon: 'layers', action: () => it.click() },
+        { label: t('Open'), icon: 'layers', action: () => it.click() },
         { sep: true },
-        { label: 'Delete file…', icon: 'trash', danger: true,
+        { label: t('Delete file…'), icon: 'trash', danger: true,
           disabled: state.running,
           action: () => deleteFile(fn, where) },
       ]);
@@ -561,8 +566,8 @@
   function recordItem(fn) {
     const it = document.createElement('div');
     it.className = 'tree-item record-item';
-    const label = { 'JOURNAL.md': 'Journal (full record)', 'LOG.md': 'Log (compacted)',
-                    'chat.jsonl': 'Conversation' }[fn] || fn;
+    const label = t({ 'JOURNAL.md': 'Journal (full record)', 'LOG.md': 'Log (compacted)',
+                      'chat.jsonl': 'Conversation' }[fn] || fn);
     it.innerHTML = `${ICONS.record}<span class="tree-label">${esc(label)}</span>`
       + `<span class="tree-meta">${esc(fn.split('.').pop())}</span>`;
     it.addEventListener('click', e => {
@@ -578,7 +583,7 @@
     const host = $('#catalog');
     host.innerHTML = '';
     if (!allProjects.length) {
-      host.innerHTML = `<div class="tree-empty">No projects yet.<br/>Press <b>＋ New</b> to create one.</div>`;
+      host.innerHTML = `<div class="tree-empty">${t('No projects yet.<br/>Press <b>＋ New</b> to create one.')}</div>`;
       return;
     }
     allProjects.forEach(pj => {
@@ -612,21 +617,21 @@
       if (isOpen && state.tree) {
         // data
         const dHead = document.createElement('div');
-        dHead.className = 'tree-subhead'; dHead.textContent = 'data';
+        dHead.className = 'tree-subhead'; dHead.textContent = t('data');
         children.appendChild(dHead);
         if (state.tree.data.length) state.tree.data.forEach(fn => children.appendChild(fileItem(fn, 'data')));
-        else { const e = document.createElement('div'); e.className = 'tree-hint-item'; e.textContent = '(empty — add data)'; children.appendChild(e); }
+        else { const e = document.createElement('div'); e.className = 'tree-hint-item'; e.textContent = t('(empty — add data)'); children.appendChild(e); }
         // records — the project's own journal / log / conversation
         if ((state.tree.records || []).length) {
           const rHead = document.createElement('div');
-          rHead.className = 'tree-subhead'; rHead.textContent = 'records';
+          rHead.className = 'tree-subhead'; rHead.textContent = t('records');
           children.appendChild(rHead);
           state.tree.records.forEach(fn => children.appendChild(recordItem(fn)));
         }
         // outputs
         if (state.tree.outputs.length) {
           const oHead = document.createElement('div');
-          oHead.className = 'tree-subhead'; oHead.textContent = 'outputs';
+          oHead.className = 'tree-subhead'; oHead.textContent = t('outputs');
           children.appendChild(oHead);
           state.tree.outputs.forEach(fn => children.appendChild(fileItem(fn, 'outputs')));
         }
@@ -647,7 +652,7 @@
     $('#btnAddData').disabled = false;
     $('#btnToolbox').disabled = false;
     $('#startBtn').disabled = false;
-    $('#footHint').textContent = state.tree.data.length ? 'Describe an analysis and press Run.' : 'Add data to this project to begin.';
+    $('#footHint').textContent = t(state.tree.data.length ? 'Describe an analysis and press Run.' : 'Add data to this project to begin.');
     renderCatalog();
     clearMap();
     resetCounters(); resetCode(); resetImageView();
@@ -668,15 +673,16 @@
   // Chat + counters
   // ==================================================================
   const chatScroll = $('#chatScroll');
-  const KIND_LABELS = { user: 'You', thought: 'Thought', action: 'Action', observe: 'Observation', error: 'Issue', finish: 'Done', answer: 'Answer', system: 'Info' };
+  const KIND_SRC = { user: 'You', thought: 'Thought', action: 'Action', observe: 'Observation', error: 'Issue', finish: 'Done', answer: 'Answer', system: 'Info' };
+  const kindLabel = k => t(KIND_SRC[k] || k);
   function nowTime() { const d = new Date(); return d.toTimeString().slice(0, 8); }
   function addMsg({ kind, text, html, md }) {
     const m = document.createElement('div');
     m.className = 'msg msg-' + kind;
     // `md` is anything the model wrote: it gets laid out as prose, not dumped.
     const body = html || (md ? prose(md) : esc(text || ''));
-    m.innerHTML = `<div class="msg-meta"><span class="agent-tag">${KIND_LABELS[kind] || kind}</span><span class="ts">${nowTime()}</span></div>`
-      + `<div class="msg-actions"><button class="msg-act" title="Save this as a standing preference in your global memory">Remember</button></div>`
+    m.innerHTML = `<div class="msg-meta"><span class="agent-tag">${kindLabel(kind)}</span><span class="ts">${nowTime()}</span></div>`
+      + `<div class="msg-actions"><button class="msg-act" title="${esc(t('Save this as a standing preference in your global memory'))}">${t('Remember')}</button></div>`
       + `<div class="msg-body${md ? ' prose' : ''}">${body}</div>`;
     m.querySelector('.msg-act').addEventListener('click', () => {
       rememberText(text || m.querySelector('.msg-body').textContent);
@@ -697,7 +703,7 @@
     wrap.innerHTML =
       '<div class="trace-head">'
       + '<span class="trace-caret"></span>'
-      + '<span class="trace-title">Working\u2026</span>'
+      + '<span class="trace-title">' + t('Working…') + '</span>'
       + '<span class="trace-sub"></span>'
       + '</div><div class="trace-body"></div>';
     wrap.querySelector('.trace-head').addEventListener('click', () => {
@@ -729,7 +735,7 @@
     const wrap = state.traceEl || openTrace();
     const row = document.createElement('div');
     row.className = 'trace-row trace-' + kind;
-    row.innerHTML = `<span class="trace-tag">${KIND_LABELS[kind] || kind}</span>`
+    row.innerHTML = `<span class="trace-tag">${kindLabel(kind)}</span>`
       + `<span class="trace-text">${html || esc(text || '')}</span>`;
     wrap.querySelector('.trace-body').appendChild(row);
     state.traceCount++;
@@ -759,7 +765,7 @@
     // since the bubble is folded the moment the answer lands, before `done`.
     const el = (done && done.elapsed_s)
       || (state.startedAt ? ((Date.now() - state.startedAt) / 1000).toFixed(1) : 0);
-    closeTraceEl(wrap, `Reasoning \u00b7 ${n} step${n === 1 ? '' : 's'}${el ? ` \u00b7 ${el}s` : ''}`);
+    closeTraceEl(wrap, el ? t('Reasoning · {n} steps · {t}s', { n, t: el }) : t('Reasoning · {n} steps', { n }));
     state.traceEl = null;
   }
 
@@ -772,17 +778,17 @@
     state.startedAt = Date.now();
     state.timer = setInterval(() => {
       const s = Math.floor((Date.now() - state.startedAt) / 1000);
-      $('#timerCount').textContent = `Elapsed · ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+      $('#timerCount').textContent = t('Elapsed · {t}', { t: `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` });
     }, 250);
   }
   function stopTimer() { if (state.timer) { clearInterval(state.timer); state.timer = null; } }
-  function bumpStep() { state.steps++; $('#stepCount').textContent = `Steps · ${state.steps}`; }
-  function setSelfCorr(n) { state.selfCorr = n; $('#selfCorrCount').textContent = `Self-corrections · ${n}`; }
+  function bumpStep() { state.steps++; $('#stepCount').textContent = t('Steps · {n}', { n: state.steps }); }
+  function setSelfCorr(n) { state.selfCorr = n; $('#selfCorrCount').textContent = t('Self-corrections · {n}', { n }); }
   function resetCounters() {
     state.steps = 0; state.selfCorr = 0;
-    $('#stepCount').textContent = 'Steps · 0';
-    $('#selfCorrCount').textContent = 'Self-corrections · 0';
-    $('#timerCount').textContent = 'Elapsed · 00:00';
+    $('#stepCount').textContent = t('Steps · 0');
+    $('#selfCorrCount').textContent = t('Self-corrections · 0');
+    $('#timerCount').textContent = t('Elapsed · 00:00');
   }
 
   // Tabs
@@ -843,12 +849,12 @@
     const stage = $('#dataStage');
     const q = ($('#dataFilter').value || '').toLowerCase();
     $('#dataFilter').style.display = (dataDoc.rows && !dataDoc.raw) ? '' : 'none';
-    $('#dataRaw').textContent = dataDoc.raw ? 'Table' : 'Raw text';
+    $('#dataRaw').textContent = t(dataDoc.raw ? 'Table' : 'Raw text');
     $('#dataRaw').style.display = dataDoc.rows ? '' : 'none';
 
     if (!dataDoc.rows || dataDoc.raw) {
       stage.innerHTML = `<pre class="data-text">${esc(dataDoc.text.slice(0, 200000))}</pre>`;
-      $('#dataMeta').textContent = `${dataDoc.text.split('\n').length} lines`;
+      $('#dataMeta').textContent = t('{n} lines', { n: dataDoc.text.split('\n').length });
       return;
     }
     const [head, ...body] = dataDoc.rows;
@@ -860,8 +866,8 @@
       + capped.map((r, i) => `<tr><td class="attr-idx">${i + 1}</td>`
           + head.map((_, c) => `<td>${esc(r[c] === undefined ? '' : r[c])}</td>`).join('') + `</tr>`).join('')
       + `</tbody></table>`;
-    $('#dataMeta').textContent = `${shown.length} of ${body.length} rows × ${head.length} cols`
-      + (capped.length < shown.length ? ` · showing first ${capped.length}` : '');
+    $('#dataMeta').textContent = t('{a} of {b} rows × {c} cols', { a: shown.length, b: body.length, c: head.length })
+      + (capped.length < shown.length ? ' ' + t('· showing first {n}', { n: capped.length }) : '');
   }
   $('#dataFilter').addEventListener('input', renderDataView);
   $('#dataRaw').addEventListener('click', () => { dataDoc.raw = !dataDoc.raw; renderDataView(); });
@@ -871,7 +877,7 @@
     const img = $('#imageEl');
     img.src = src + (src.includes('?') ? '&' : '?') + 't=' + Date.now();
     $('#imageFilename').textContent = filename;
-    $('#imageMeta').textContent = 'Agent output';
+    $('#imageMeta').textContent = t('Agent output');
     $('#imageTab').removeAttribute('hidden');
     switchTab('image');
   }
@@ -906,9 +912,9 @@
   }
   function resetCode() {
     $('#codeGutter').textContent = '';
-    $('#codeLines').innerHTML = '<span class="code-placeholder">// Generated code appears here as the agent runs…</span>';
-    $('#codeOutputBody').innerHTML = '<span class="out-muted">Output appears here as the agent runs code.</span>';
-    $('#codeRunState').textContent = 'Ready'; $('#codeRunState').className = 'code-run-state';
+    $('#codeLines').innerHTML = '<span class="code-placeholder">// …</span>';
+    $('#codeOutputBody').innerHTML = `<span class="out-muted">${t('Output appears here as the agent runs code.')}</span>`;
+    $('#codeRunState').textContent = t('Ready'); $('#codeRunState').className = 'code-run-state';
     state.codeStarted = false;
   }
   function appendCode(codeText) {
@@ -936,7 +942,7 @@
     out.appendChild(pre);
     out.scrollTop = out.scrollHeight;
     const rs = $('#codeRunState');
-    rs.textContent = ok ? 'Executed' : 'Error';
+    rs.textContent = t(ok ? 'Executed' : 'Error');
     rs.className = 'code-run-state ' + (ok ? 'success' : 'failed');
   }
 
@@ -947,14 +953,14 @@
     // Counters/code/image reset per run — but the conversation is a record now,
     // so it is never wiped here; new turns are appended below the history.
     resetCounters(); resetCode(); resetImageView();
-    setStatus('Idle', '');
+    setStatus(t('Idle'), '');
   }
 
   async function newThread() {
     if (!state.project || state.running) return;
     await fetch(`/api/projects/${state.project.id}/chat`, { method: 'DELETE' });
     await loadHistory();
-    addMsg({ kind: 'system', text: 'Started a new conversation. The previous one is archived in the project folder, and JOURNAL.md still holds every run.' });
+    addMsg({ kind: 'system', text: t('Started a new conversation. The previous one is archived in the project folder, and JOURNAL.md still holds every run.') });
   }
 
   // Per-run UI state, shared by a fresh start and by rejoining a run after a
@@ -974,17 +980,17 @@
     if (instruction) addMsg({ kind: 'user', text: instruction });
     $('#startBtn').classList.add('hidden'); $('#stopBtn').classList.remove('hidden');
     $('#stopBtn').disabled = false;
-    setStatus('Running', 'running'); startTimer();
+    setStatus(t('Running'), 'running'); startTimer();
     return rid;
   }
 
   async function runAnalysis() {
     if (state.running || !state.project) return;
     const instruction = $('#promptInput').value.trim();
-    if (!instruction) { addMsg({ kind: 'error', text: 'Please describe the analysis first.' }); return; }
-    if (!state.tree || !state.tree.data.length) { addMsg({ kind: 'error', text: 'This project has no data yet. Add data first.' }); return; }
+    if (!instruction) { addMsg({ kind: 'error', text: t('Please describe the analysis first.') }); return; }
+    if (!state.tree || !state.tree.data.length) { addMsg({ kind: 'error', text: t('This project has no data yet. Add data first.') }); return; }
     if (!$('#modelSelect').value) {
-      addMsg({ kind: 'error', html: 'No model configured — open <b>Settings → API keys</b> and add one first.' });
+      addMsg({ kind: 'error', html: t('No model configured — open <b>Settings → API keys</b> and add one first.') });
       return;
     }
     const rid = beginRunUI(instruction);
@@ -996,12 +1002,12 @@
     try {
       resp = await fetch('/api/run', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: state.project.id, model: $('#modelSelect').value, instruction }),
+        body: JSON.stringify({ project_id: state.project.id, model: $('#modelSelect').value, instruction, language: window.I18N.lang }),
       });
-    } catch (e) { finishRun(rid, false, 'Network error'); return; }
+    } catch (e) { finishRun(rid, false, t('Network error')); return; }
     if (!resp.ok || (resp.headers.get('content-type') || '').includes('application/json')) {
       // Refused before it started: another run is active, or the request was bad.
-      let err = `Could not start (${resp.status}).`;
+      let err = t('Could not start ({code}).', { code: resp.status });
       try { const j = await resp.json(); err = j.error || err; } catch (e) {}
       finishRun(rid, false, err);
       if (resp.status === 409) attachActiveRun();
@@ -1030,7 +1036,7 @@
       }
     }
     // The stream ended without a `done` event: the server went away mid-run.
-    if (rid === state.runId && state.running) finishRun(rid, false, 'The connection to the server was lost.');
+    if (rid === state.runId && state.running) finishRun(rid, false, t('The connection to the server was lost.'));
   }
 
   // A run keeps going on the server when this page reloads. If one is active
@@ -1045,12 +1051,12 @@
     const rid = beginRunUI(null);
     state.serverRun = run.run_id;
     state.startedAt = Math.round(run.started * 1000);
-    addMsg({ kind: 'system', text: `Rejoined the run in progress (${run.run_id}).` });
-    if (run.stopping) { setStatus('Stopping…', 'running'); $('#stopBtn').disabled = true; }
+    addMsg({ kind: 'system', text: t('Rejoined the run in progress ({id}).', { id: run.run_id }) });
+    if (run.stopping) { setStatus(t('Stopping…'), 'running'); $('#stopBtn').disabled = true; }
     let resp;
     try { resp = await fetch(`/api/run/${encodeURIComponent(run.run_id)}/stream`); }
-    catch (e) { finishRun(rid, false, 'Network error'); return; }
-    if (!resp.ok) { finishRun(rid, false, `Could not rejoin the run (${resp.status}).`); return; }
+    catch (e) { finishRun(rid, false, t('Network error')); return; }
+    if (!resp.ok) { finishRun(rid, false, t('Could not rejoin the run ({code}).', { code: resp.status })); return; }
     await consumeStream(resp, rid);
   }
 
@@ -1065,7 +1071,7 @@
 
     if (ev === 'heartbeat') return;
     if (ev === 'run') { state.serverRun = msg.run_id; return; }
-    if (ev === 'status') { traceStatus(msg.content); return; }
+    if (ev === 'status') { traceStatus(msg.code ? t(msg.code, msg.params || {}) : msg.content); return; }
     if (ev === 'answer') {
       // Answered from the project record — no analysis run was needed.
       addMsg({ kind: msg.mode === 'offtopic' ? 'system' : 'answer', md: msg.content });
@@ -1075,14 +1081,14 @@
       // Every run ends in words. This is them.
       state.gotSummary = true;
       closeTrace();                       // fold the reasoning before the answer
-      renderSummary(msg.content, msg.outputs);
+      renderSummary(msg.code ? t(msg.code, msg.params || {}) + (msg.code2 ? t(msg.code2, msg.params || {}) : '') : msg.content, msg.outputs);
       return;
     }
     if (ev === 'log') {
       // The durable digest. It repeats the summary above, so it starts folded.
       const m = addMsg({
         kind: 'system',
-        html: `<details class="log-fold"><summary>Log entry written to LOG.md</summary>`
+        html: `<details class="log-fold"><summary>${t('Log entry written to LOG.md')}</summary>`
             + `<div class="log-digest prose">${prose(msg.content)}</div></details>`,
       });
       m.classList.add('msg-history');
@@ -1130,11 +1136,11 @@
   function renderSummary(text, outputs) {
     const body = (text || '').trim();
     if (!body && !(outputs || []).length) return null;
-    const m = addMsg({ kind: 'answer', md: body || '_No closing summary was written for this run._' });
+    const m = addMsg({ kind: 'answer', md: body || t('_No closing summary was written for this run._') });
     if ((outputs || []).length) {
       const row = document.createElement('div');
       row.className = 'ans-files';
-      row.innerHTML = '<span class="ans-files-label">Produced</span>'
+      row.innerHTML = `<span class="ans-files-label">${t('Produced')}</span>`
         + outputs.map(f => `<a class="run-file" data-f="${esc(f)}">${esc(f)}</a>`).join('');
       row.querySelectorAll('.run-file').forEach(a => a.addEventListener('click', () => openOutput(a.dataset.f)));
       m.querySelector('.msg-body').appendChild(row);
@@ -1158,9 +1164,9 @@
     state.serverRun = null;
     $('#startBtn').classList.remove('hidden'); $('#stopBtn').classList.add('hidden');
     $('#stopBtn').disabled = false;
-    setStatus(success ? 'Done' : (done && done.stopped ? 'Stopped' : 'Failed'), success ? 'done' : '');
+    setStatus(t(success ? 'Done' : (done && done.stopped ? 'Stopped' : 'Failed')), success ? 'done' : '');
     if (done && done.answered) {
-      setStatus('Idle', '');
+      setStatus(t('Idle'), '');
       return;                       // answered from the record; nothing was run
     }
     closeTrace(done);
@@ -1169,7 +1175,7 @@
     state.gotSummary = false; state.finishObs = '';
     if (done) {
       setSelfCorr(done.self_corrections || 0);
-      addMsg({ kind: 'finish', html: `Finished in <b>${done.elapsed_s}s</b> · ${done.rounds} rounds · ${(done.output_files || []).length} output(s)` });
+      addMsg({ kind: 'finish', html: t('Finished in <b>{t}s</b> · {n} rounds · {k} output(s)', { t: done.elapsed_s, n: done.rounds, k: (done.output_files || []).length }) });
     } else if (errText) {
       addMsg({ kind: 'error', text: errText });
     }
@@ -1189,12 +1195,12 @@
     // The run ends on the server, not here: the current step is interrupted
     // and the run records itself as stopped, which then arrives as `done`.
     $('#stopBtn').disabled = true;
-    setStatus('Stopping…', 'running');
+    setStatus(t('Stopping…'), 'running');
     if (state.serverRun) {
       try { await jpost(`/api/run/${encodeURIComponent(state.serverRun)}/cancel`, {}); } catch (e) {}
     } else {
       // No server id yet — nothing to address. Drop the stream.
-      finishRun(state.runId, false, 'Stopped.');
+      finishRun(state.runId, false, t('Stopped.'));
     }
   });
   // "Clear" resets the view, then restores the conversation from disk — the
@@ -1248,7 +1254,7 @@
     let ok = 0, bad = 0;
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      count.textContent = `uploading ${i + 1}/${files.length} — ${f.name}`;
+      count.textContent = t('uploading {i}/{n} — {name}', { i: i + 1, n: files.length, name: f.name });
       const q = `?name=${encodeURIComponent(f.name)}`
               + `&rel=${encodeURIComponent(f.webkitRelativePath || f.name)}`;
       try {
@@ -1258,12 +1264,12 @@
         ok++;
       } catch (e) { bad++; }
     }
-    count.textContent = `${ok} uploaded${bad ? `, ${bad} failed` : ''}`;
+    count.textContent = t('{n} uploaded', { n: ok }) + (bad ? t(', {n} failed', { n: bad }) : '');
     closeBrowse();
     await refreshTree();
     addMsg({ kind: bad ? 'error' : 'system',
-             text: `Uploaded ${ok} file(s) to ${state.project.name}.`
-                   + (bad ? ` ${bad} failed.` : '') });
+             text: t('Uploaded {n} file(s) to {p}.', { n: ok, p: state.project.name })
+                   + (bad ? t(' {n} failed.', { n: bad }) : '') });
     try {
       const chk = await jget(`/api/projects/${state.project.id}/data_check`);
       (chk.notices || []).forEach(n => addMsg({ kind: 'system', text: n }));
@@ -1305,7 +1311,7 @@
   $('#confirmCancel').addEventListener('click', () => closeConfirm(false));
   $('#confirmClose').addEventListener('click', () => closeConfirm(false));
   $('#confirmOk').addEventListener('click', () => closeConfirm(true));
-  function askConfirm({ title, html, okLabel = 'Delete' }) {
+  function askConfirm({ title, html, okLabel = t('Delete') }) {
     $('#confirmTitle').textContent = title;
     $('#confirmBody').innerHTML = html;
     $('#confirmOk').querySelector('span').textContent = okLabel;
@@ -1315,11 +1321,10 @@
 
   async function deleteFile(fn, where) {
     const ok = await askConfirm({
-      title: 'Delete file',
-      html: `<b>${esc(fn)}</b> will be deleted from <code>${esc(where)}/</code>.<br/>`
-          + `This cannot be undone. Earlier runs keep their own copies under <code>runs/</code>.`
+      title: t('Delete file'),
+      html: t('<b>{f}</b> will be deleted from <code>{w}/</code>.<br/>This cannot be undone. Earlier runs keep their own copies under <code>runs/</code>.', { f: esc(fn), w: esc(where) })
           + (extOf(fn) === 'shp'
-             ? `<br/><br/>Its <code>.shx</code>/<code>.dbf</code>/<code>.prj</code> siblings go with it — a lone <code>.shp</code> is unreadable.`
+             ? t('<br/><br/>Its <code>.shx</code>/<code>.dbf</code>/<code>.prj</code> siblings go with it — a lone <code>.shp</code> is unreadable.')
              : ''),
     });
     if (!ok) return;
@@ -1331,21 +1336,19 @@
     const key = layerKey(where, fn);
     if (shownLayers[key]) { map.removeLayer(shownLayers[key].layer); delete shownLayers[key]; renderLegend(); }
     if (state.imageName === fn) resetImageView();
-    addMsg({ kind: 'system', text: `Deleted ${res.removed.join(', ')} from ${where}/.` });
+    addMsg({ kind: 'system', text: t('Deleted {list} from {w}/.', { list: res.removed.join(', '), w: where }) });
     await refreshTree();
   }
 
   async function deleteProject(pj) {
-    const t = (state.project && state.project.id === pj.id && state.tree) || null;
-    const counts = t
-      ? `${t.data.length} data file(s), ${t.outputs.length} output(s), ${(t.runs || []).length} run(s)`
-      : `${pj.data_count || 0} data file(s) and its whole run history`;
+    const tr = (state.project && state.project.id === pj.id && state.tree) || null;
+    const counts = tr
+      ? t('{n} data file(s), {m} output(s), {r} run(s)', { n: tr.data.length, m: tr.outputs.length, r: (tr.runs || []).length })
+      : t('{n} data file(s) and its whole run history', { n: pj.data_count || 0 });
     const ok = await askConfirm({
-      title: 'Delete project',
-      html: `<b>${esc(pj.name)}</b> and everything in it — ${counts} — will be deleted `
-          + `from disk. This cannot be undone.<br/><br/>`
-          + `Prefer <b>Archive</b> if you might want it back, or <b>Export as zip</b> first.`,
-      okLabel: 'Delete project',
+      title: t('Delete project'),
+      html: t('<b>{p}</b> and everything in it — {counts} — will be deleted from disk. This cannot be undone.<br/><br/>Prefer <b>Archive</b> if you might want it back, or <b>Export as zip</b> first.', { p: esc(pj.name), counts }),
+      okLabel: t('Delete project'),
     });
     if (!ok) return;
     const res = await jsend(`/api/projects/${pj.id}?confirm=${encodeURIComponent(pj.id)}`,
@@ -1356,7 +1359,7 @@
       clearMap(); resetCode(); resetImageView();
       $('#btnAddData').disabled = true; $('#btnToolbox').disabled = true; $('#startBtn').disabled = true;
     }
-    addMsg({ kind: 'system', text: `Deleted project "${pj.name}".` });
+    addMsg({ kind: 'system', text: t('Deleted project "{p}".', { p: pj.name }) });
     await loadProjects();
   }
 
@@ -1364,8 +1367,7 @@
     const res = await jpost(`/api/projects/${pj.id}/archive`, {});
     if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
     addMsg({ kind: 'system',
-             text: `Archived "${pj.name}". Nothing was deleted — bring it back from `
-                   + `Project → Archived projects.` });
+             text: t('Archived "{p}". Nothing was deleted — bring it back from Project → Archived projects.', { p: pj.name }) });
     if (state.project && state.project.id === pj.id) { state.project = null; clearMap(); }
     await loadProjects();
   }
@@ -1377,12 +1379,12 @@
 
   async function openArchived() {
     const list = $('#archivedList');
-    list.innerHTML = '<div class="tree-hint-item">Loading…</div>';
+    list.innerHTML = `<div class="tree-hint-item">${t('Loading…')}</div>`;
     archivedModal.classList.remove('hidden');
     let rows = [];
     try { rows = await jget('/api/archived'); } catch (e) { rows = []; }
     if (!rows.length) {
-      list.innerHTML = '<div class="tree-hint-item">Nothing archived yet.</div>';
+      list.innerHTML = `<div class="tree-hint-item">${t('Nothing archived yet.')}</div>`;
       return;
     }
     list.innerHTML = '';
@@ -1391,33 +1393,32 @@
       row.className = 'browse-row';
       row.innerHTML = `<span class="browse-ic">${ICONS.folder}</span>`
         + `<span class="browse-name">${esc(r.name)}</span>`
-        + `<span class="browse-size">${r.data_count} file(s) · ${r.run_count} run(s)</span>`;
+        + `<span class="browse-size">${t('{n} file(s) · {m} run(s)', { n: r.data_count, m: r.run_count })}</span>`;
       const btn = document.createElement('button');
-      btn.className = 'mini-btn'; btn.textContent = 'Restore';
+      btn.className = 'mini-btn'; btn.textContent = t('Restore');
       btn.addEventListener('click', async e => {
         e.stopPropagation();
         const res = await jpost(`/api/archived/${r.id}/restore`, {});
         if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
-        addMsg({ kind: 'system', text: `Restored "${r.name}".` });
+        addMsg({ kind: 'system', text: t('Restored "{p}".', { p: r.name }) });
         await loadProjects();
         openArchived();
       });
       row.appendChild(btn);
       const del = document.createElement('button');
-      del.className = 'mini-btn danger'; del.textContent = 'Delete';
+      del.className = 'mini-btn danger'; del.textContent = t('Delete');
       del.addEventListener('click', async e => {
         e.stopPropagation();
         const ok = await askConfirm({
-          title: 'Delete archived project',
-          html: `<b>${esc(r.name)}</b> — ${r.data_count} file(s), ${r.run_count} run(s) — `
-              + `will be deleted from disk. This cannot be undone.`,
-          okLabel: 'Delete project',
+          title: t('Delete archived project'),
+          html: t('<b>{p}</b> — {n} file(s), {m} run(s) — will be deleted from disk. This cannot be undone.', { p: esc(r.name), n: r.data_count, m: r.run_count }),
+          okLabel: t('Delete project'),
         });
         if (!ok) { openArchived(); return; }
         const res = await jsend(`/api/archived/${r.id}?confirm=${encodeURIComponent(r.id)}`,
                                 undefined, 'DELETE');
         if (res.error) { addMsg({ kind: 'error', text: res.error }); return; }
-        addMsg({ kind: 'system', text: `Deleted archived project "${r.name}".` });
+        addMsg({ kind: 'system', text: t('Deleted archived project "{p}".', { p: r.name }) });
         openArchived();
       });
       row.appendChild(del);
@@ -1502,13 +1503,13 @@
     const el = $('#browsePath');
     const parts = here ? here.split('/') : [];
     let acc = '';
-    const crumbs = [`<a data-p="">workspace</a>`];
+    const crumbs = [`<a data-p="">${t('workspace')}</a>`];
     parts.forEach(p => { acc = acc ? acc + '/' + p : p; crumbs.push(`<a data-p="${esc(acc)}">${esc(p)}</a>`); });
     el.innerHTML = crumbs.join(' / ');
     $$('#browsePath a').forEach(a => a.addEventListener('click', () => loadBrowse(a.dataset.p)));
   }
   function humanSize(n) { if (!n) return ''; const u = ['B', 'KB', 'MB', 'GB']; let i = 0; while (n >= 1024 && i < 3) { n /= 1024; i++; } return n.toFixed(i ? 1 : 0) + u[i]; }
-  function updateBrowseCount() { $('#browseCount').textContent = `${browseSelected.size} selected`; }
+  function updateBrowseCount() { $('#browseCount').textContent = t('{n} selected', { n: browseSelected.size }); }
 
   $('#browseAttach').addEventListener('click', async () => {
     if (!browseSelected.size) { closeBrowse(); return; }
@@ -1516,8 +1517,8 @@
     closeBrowse();
     await refreshTree();
     if (res.attached && res.attached.length) {
-      $('#footHint').textContent = 'Describe an analysis and press Run.';
-      addMsg({ kind: 'system', text: `Added ${res.attached.length} file(s) to ${state.project.name}.` });
+      $('#footHint').textContent = t('Describe an analysis and press Run.');
+      addMsg({ kind: 'system', text: t('Added {n} file(s) to {p}.', { n: res.attached.length, p: state.project.name }) });
     }
     if (res.notices && res.notices.length) {
       res.notices.forEach(n => addMsg({ kind: 'system', text: n }));
@@ -1543,7 +1544,7 @@
     if (!state.project) return;
     if (!toolCatalog.length) toolCatalog = await jget('/api/tools');
     renderToolList();
-    $('#toolForm').innerHTML = `<div class="tool-empty">Select an operation on the left.</div>`;
+    $('#toolForm').innerHTML = `<div class="tool-empty">${t('Select an operation on the left.')}</div>`;
     toolModal.classList.remove('hidden');
   }
   const closeToolbox = () => toolModal.classList.add('hidden');
@@ -1581,7 +1582,7 @@
       const opts = projectLayers(inp.kind);
       const optHtml = opts.length
         ? opts.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('')
-        : `<option value="">(no ${inp.kind} layers — add data)</option>`;
+        : `<option value="">${t('(no {kind} layers — add data)', { kind: t(inp.kind) })}</option>`;
       html += `<div class="tf-row"><label>${esc(inp.role)} <span class="tf-kind">${inp.kind}</span></label>`
         + `<select class="tf-input" data-role="${esc(inp.role)}">${optHtml}</select></div>`;
     });
@@ -1594,9 +1595,9 @@
       else field = `<input type="${a.type === 'number' || a.type === 'crs' ? 'text' : 'text'}" class="tf-arg" data-name="${esc(a.name)}" data-type="${a.type}" value="${a.default !== null && a.default !== '' ? esc(String(a.default)) : ''}" placeholder="${esc(a.type)}"/>`;
       html += `<div class="tf-row"><label>${esc(a.name)}${req}</label>${field}</div>`;
     });
-    html += `<div class="tf-row"><label>output name</label><input class="tf-output" value="${esc(op.op)}_out"/></div>`;
-    html += `<div class="tf-actions"><button class="reset-btn" id="tfInsert"><span>Insert into chat</span></button>`
-      + `<span class="ca-spacer"></span><button class="primary-btn" id="tfRun"><span>Run</span></button></div>`
+    html += `<div class="tf-row"><label>${t('output name')}</label><input class="tf-output" value="${esc(op.op)}_out"/></div>`;
+    html += `<div class="tf-actions"><button class="reset-btn" id="tfInsert"><span>${t('Insert into chat')}</span></button>`
+      + `<span class="ca-spacer"></span><button class="primary-btn" id="tfRun"><span>${t('Run')}</span></button></div>`
       + `<div class="tf-status" id="tfStatus"></div>`;
     form.innerHTML = html;
     $('#tfRun').addEventListener('click', () => runTool(op));
@@ -1619,15 +1620,15 @@
 
   async function runTool(op) {
     const payload = collectTool(op);
-    const st = $('#tfStatus'); st.textContent = 'Running…'; st.className = 'tf-status running';
+    const st = $('#tfStatus'); st.textContent = t('Running…'); st.className = 'tf-status running';
     let res;
     try { res = await jpost(`/api/projects/${state.project.id}/geoprocess`, payload); }
-    catch (e) { st.textContent = 'Network error'; st.className = 'tf-status err'; return; }
+    catch (e) { st.textContent = t('Network error'); st.className = 'tf-status err'; return; }
     if (res.error || res.ok === false) {
-      st.textContent = res.error || 'Failed — check inputs.'; st.className = 'tf-status err';
+      st.textContent = res.error || t('Failed — check inputs.'); st.className = 'tf-status err';
       return;
     }
-    st.textContent = `Done → ${(res.outputs || []).map(o => o.filename).join(', ')}`; st.className = 'tf-status ok';
+    st.textContent = t('Done → {files}', { files: (res.outputs || []).map(o => o.filename).join(', ') }); st.className = 'tf-status ok';
     await refreshTree();
     (res.outputs || []).forEach(o => {
       const url = o.kind === 'raster'
@@ -1764,22 +1765,22 @@
       // A model on your own machine bills nobody, so having no key is its
       // normal state — calling that "no key" would read as something missing.
       const badge = p.key_optional && !p.masked_key
-        ? `<span class="prov-badge ${p.configured ? 'ok' : ''}">no key needed</span>`
+        ? `<span class="prov-badge ${p.configured ? 'ok' : ''}">${t('no key needed')}</span>`
         : p.configured
-          ? `<span class="prov-badge ${p.from_env ? 'env' : 'ok'}">${p.from_env ? 'from ' + esc(p.env_var) : 'key saved'}</span>`
-          : `<span class="prov-badge">no key</span>`;
+          ? `<span class="prov-badge ${p.from_env ? 'env' : 'ok'}">${p.from_env ? t('from {env}', { env: esc(p.env_var) }) : t('key saved')}</span>`
+          : `<span class="prov-badge">${t('no key')}</span>`;
       card.innerHTML =
         `<div class="prov-head">
            <span class="prov-name">${esc(p.display)}</span>${badge}
-           ${p.key_optional ? `<a class="prov-docs pv-setup" href="#">set up →</a>` : ''}
-           ${p.docs && !p.key_optional ? `<a class="prov-docs" href="${esc(p.docs)}" target="_blank" rel="noopener">get a key ↗</a>` : ''}
+           ${p.key_optional ? `<a class="prov-docs pv-setup" href="#">${t('set up →')}</a>` : ''}
+           ${p.docs && !p.key_optional ? `<a class="prov-docs" href="${esc(p.docs)}" target="_blank" rel="noopener">${t('get a key ↗')}</a>` : ''}
          </div>
          <div class="prov-row">
            <input type="password" class="pv-key" autocomplete="off" spellcheck="false"
-                  placeholder="${p.masked_key ? esc(p.masked_key) + '  (stored — type to replace)' : esc(p.key_hint || 'paste your API key')}" />
-           <button class="mini-btn primary pv-save">Save</button>
-           <button class="mini-btn pv-test">Test</button>
-           ${p.masked_key && !p.from_env ? `<button class="mini-btn danger pv-clear">Remove</button>` : ''}
+                  placeholder="${p.masked_key ? esc(t('{mask}  (stored — type to replace)', { mask: p.masked_key })) : esc(p.key_hint || t('paste your API key'))}" />
+           <button class="mini-btn primary pv-save">${t('Save')}</button>
+           <button class="mini-btn pv-test">${t('Test')}</button>
+           ${p.masked_key && !p.from_env ? `<button class="mini-btn danger pv-clear">${t('Remove')}</button>` : ''}
          </div>
          ${p.needs_base_url ? `<div class="prov-row">
            <input type="text" class="pv-url" spellcheck="false" value="${esc(p.base_url || '')}"
@@ -1798,23 +1799,23 @@
         if (keyIn.value.trim()) body.api_key = keyIn.value.trim();
         if (urlIn) body.base_url = urlIn.value.trim();
         if (!Object.keys(body).length) {
-          say(p.key_optional ? 'Nothing to save — fill in the address first.'
-                             : 'Nothing to save — paste a key first.', 'err');
+          say(t(p.key_optional ? 'Nothing to save — fill in the address first.'
+                               : 'Nothing to save — paste a key first.'), 'err');
           return;
         }
-        say('Saving…');
+        say(t('Saving…'));
         const res = await jsend(`/api/settings/providers/${p.id}`, body);
         settings.providers = res.providers; settings.models = res.models;
         keyIn.value = '';
         renderProviders(); renderModels(); refreshModelSelect();
-        say('Saved.', 'ok');
+        say(t('Saved.'), 'ok');
       });
 
       card.querySelector('.pv-test').addEventListener('click', async () => {
-        say('Calling the API…');
+        say(t('Calling the API…'));
         const res = await jsend(`/api/settings/providers/${p.id}/test`, {});
-        if (res.ok) say(`Works — ${esc(res.model_name)} replied "${esc(res.reply)}".`, 'ok');
-        else say(res.error || 'Failed.', 'err');
+        if (res.ok) say(t('Works — {model} replied "{reply}".', { model: esc(res.model_name), reply: esc(res.reply) }), 'ok');
+        else say(res.error || t('Failed.'), 'err');
       });
 
       const setup = card.querySelector('.pv-setup');
@@ -1837,14 +1838,14 @@
       const row = document.createElement('div');
       row.className = 'model-row' + (m.ready ? '' : ' not-ready');
       row.innerHTML =
-        `<input type="checkbox" ${m.enabled ? 'checked' : ''} title="Show in the run selector" />
+        `<input type="checkbox" ${m.enabled ? 'checked' : ''} title="${esc(t('Show in the run selector'))}" />
          <span class="model-name">${esc(m.display)}</span>
          <span class="model-meta">${esc(m.provider_display)} · ${esc(m.model_name)}</span>
          <span class="model-spacer"></span>
-         <span class="model-flag ${m.ready ? 'ready' : 'nokey'}">${m.ready ? 'ready' : esc(m.blocked || 'no key')}</span>
-         ${m.custom ? '<span class="model-flag">custom</span>' : ''}
-         <button class="mini-btn md-edit">Edit</button>
-         <button class="mini-btn danger md-del">${m.custom ? 'Delete' : 'Disable'}</button>`;
+         <span class="model-flag ${m.ready ? 'ready' : 'nokey'}">${m.ready ? t('ready') : esc(t(m.blocked || 'no key'))}</span>
+         ${m.custom ? `<span class="model-flag">${t('custom')}</span>` : ''}
+         <button class="mini-btn md-edit">${t('Edit')}</button>
+         <button class="mini-btn danger md-del">${t(m.custom ? 'Delete' : 'Disable')}</button>`;
       row.querySelector('input').addEventListener('change', async e => {
         const res = await jsend(`/api/settings/models/${m.id}/toggle`, { enabled: e.target.checked });
         settings.models = res.models; renderModels(); refreshModelSelect();
@@ -1868,23 +1869,23 @@
   async function fetchAvailable() {
     const pid = $('#discProvider').value;
     const st = $('#discStatus'), host = $('#discList');
-    st.textContent = 'Asking the provider…'; st.className = 'tf-status running';
+    st.textContent = t('Asking the provider…'); st.className = 'tf-status running';
     host.innerHTML = '';
     const res = await jget(`/api/settings/providers/${pid}/available`);
     if (!res.ok) {
-      st.textContent = res.error || 'Could not list models.'; st.className = 'tf-status err';
+      st.textContent = res.error || t('Could not list models.'); st.className = 'tf-status err';
       return;
     }
-    st.textContent = `${res.models.length} chat model(s)`
-      + (res.filtered_out ? ` · ${res.filtered_out} non-chat hidden` : '');
+    st.textContent = t('{n} chat model(s)', { n: res.models.length })
+      + (res.filtered_out ? t(' · {n} non-chat hidden', { n: res.filtered_out }) : '');
     st.className = 'tf-status ok';
-    if (!res.models.length) { host.innerHTML = `<span class="disc-empty">Nothing returned.</span>`; return; }
+    if (!res.models.length) { host.innerHTML = `<span class="disc-empty">${t('Nothing returned.')}</span>`; return; }
     res.models.forEach(m => {
       const el = document.createElement('span');
       el.className = 'disc-item' + (m.already_added ? ' added' : '');
       el.innerHTML = `<span>${esc(m.id)}</span>`
-        + (m.already_added ? '<span class="model-flag">added</span>'
-                           : `<button class="disc-add" title="Add this model">＋</button>`);
+        + (m.already_added ? `<span class="model-flag">${t('added')}</span>`
+                           : `<button class="disc-add" title="${esc(t('Add this model'))}">＋</button>`);
       const add = el.querySelector('.disc-add');
       if (add) add.addEventListener('click', () => addDiscovered(pid, m.id));
       host.appendChild(el);
@@ -1901,7 +1902,7 @@
     if (res.error) { st.textContent = res.error; st.className = 'tf-status err'; return; }
     settings.models = res.models;
     renderModels(); refreshModelSelect();
-    st.textContent = `Added ${modelName} — it is now in the run selector.`;
+    st.textContent = t('Added {m} — it is now in the run selector.', { m: modelName });
     st.className = 'tf-status ok';
     fetchAvailable();
   }
@@ -1946,17 +1947,17 @@
     if (!localProbe) {
       host.innerHTML = added.size
         ? [...added.values()].map(m => `<div class="lm-row"><span class="lm-name">${esc(m.model_name)}</span>`
-            + `<span class="lm-meta">added · context ${fmtCtx(m.context_chars)} chars per round</span>`
-            + `<button class="mini-btn lm-test" data-m="${esc(m.model_name)}">Test</button></div>`).join('')
-        : `<div class="lm-empty">Press <b>Connect</b> to see what the server is serving.</div>`;
+            + `<span class="lm-meta">${t('added · context {n} chars per round', { n: fmtCtx(m.context_chars) })}</span>`
+            + `<button class="mini-btn lm-test" data-m="${esc(m.model_name)}">${t('Test')}</button></div>`).join('')
+        : `<div class="lm-empty">${t('Press <b>Connect</b> to see what the server is serving.')}</div>`;
     } else {
       const rows = localProbe.models || [];
       const running = new Map((localProbe.running || []).map(r => [r.id, r.context]));
       host.innerHTML = rows.length ? rows.map(m => {
         const ctx = running.get(m.id) || m.context_set;
         const ctxLabel = ctx
-          ? `context ${fmtCtx(ctx)}${running.has(m.id) ? ' (loaded)' : ''}`
-          : (m.context_max ? `context up to ${fmtCtx(m.context_max)} · server default applies` : 'context unknown');
+          ? t('context {n}', { n: fmtCtx(ctx) }) + (running.has(m.id) ? t(' (loaded)') : '')
+          : (m.context_max ? t('context up to {n} · server default applies', { n: fmtCtx(m.context_max) }) : t('context unknown'));
         const bad = ctx && ctx < (localInfo.min_context || 8192);
         const meta = [m.params, m.quant, m.size_gb ? `${m.size_gb} GB` : ''].filter(Boolean).join(' · ');
         const isAdded = added.has(m.id) || m.already_added;
@@ -1964,10 +1965,10 @@
           + `<span class="lm-name">${esc(m.id)}</span>`
           + `<span class="lm-meta">${esc(meta)}</span>`
           + `<span class="lm-ctx ${bad ? 'bad' : (ctx ? 'ok' : '')}">${esc(ctxLabel)}</span>`
-          + (isAdded ? `<span class="model-flag">added</span><button class="mini-btn lm-test" data-m="${esc(m.id)}">Test</button>`
-                     : `<button class="mini-btn primary lm-add" data-m="${esc(m.id)}" data-ctx="${m.context_chars || ''}">Add</button>`)
+          + (isAdded ? `<span class="model-flag">${t('added')}</span><button class="mini-btn lm-test" data-m="${esc(m.id)}">${t('Test')}</button>`
+                     : `<button class="mini-btn primary lm-add" data-m="${esc(m.id)}" data-ctx="${m.context_chars || ''}">${t('Add this model').split(' ')[0]}</button>`)
           + `</div>`;
-      }).join('') : `<div class="lm-empty">The server answered but has no models. Pull one first — see below.</div>`;
+      }).join('') : `<div class="lm-empty">${t('The server answered but has no models. Pull one first — see below.')}</div>`;
     }
     host.querySelectorAll('.lm-add').forEach(b => b.addEventListener('click', () => addLocalModel(b.dataset.m, +b.dataset.ctx || 0)));
     host.querySelectorAll('.lm-test').forEach(b => b.addEventListener('click', () => testLocalModel(b.dataset.m, b)));
@@ -1977,27 +1978,27 @@
     $('#localReco').innerHTML = (localInfo.recommended || []).map(r =>
       `<div class="reco-row"><code>ollama pull ${esc(r.name)}</code>`
       + `<span class="reco-needs">${esc(r.needs)}</span><span class="reco-note">${esc(r.note)}</span>`
-      + `<button class="mini-btn reco-copy" data-cmd="ollama pull ${esc(r.name)}">Copy</button></div>`).join('');
+      + `<button class="mini-btn reco-copy" data-cmd="ollama pull ${esc(r.name)}">${t('Copy')}</button></div>`).join('');
     $$('#localReco .reco-copy').forEach(b => b.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(b.dataset.cmd); b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1500); } catch (e) {}
+      try { await navigator.clipboard.writeText(b.dataset.cmd); b.textContent = t('Copied'); setTimeout(() => { b.textContent = t('Copy'); }, 1500); } catch (e) {}
     }));
   }
 
   async function connectLocal() {
     const st = $('#localStatus'), url = $('#localUrl').value.trim();
-    if (!url) { st.textContent = 'Enter the server address first.'; st.className = 'tf-status err'; return; }
-    st.textContent = 'Connecting…'; st.className = 'tf-status running';
+    if (!url) { st.textContent = t('Enter the server address first.'); st.className = 'tf-status err'; return; }
+    st.textContent = t('Connecting…'); st.className = 'tf-status running';
     $('#localAdvice').classList.add('hidden');
     const res = await jget(`/api/settings/local/probe?base_url=${encodeURIComponent(url)}`);
-    if (!res.ok) { localProbe = null; st.textContent = res.error || 'No answer.'; st.className = 'tf-status err'; renderLocalModels(); return; }
+    if (!res.ok) { localProbe = null; st.textContent = res.error || t('No answer.'); st.className = 'tf-status err'; renderLocalModels(); return; }
     localProbe = res;
-    const kindName = res.kind === 'ollama' ? `Ollama${res.version ? ' ' + res.version : ''}` : 'an OpenAI-compatible server';
-    st.textContent = `Connected to ${kindName} — ${res.models.length} model(s).`; st.className = 'tf-status ok';
+    const kindName = res.kind === 'ollama' ? `Ollama${res.version ? ' ' + res.version : ''}` : t('an OpenAI-compatible server');
+    st.textContent = t('Connected to {kind} — {n} model(s).', { kind: kindName, n: res.models.length }); st.className = 'tf-status ok';
     localInfo = await jget('/api/settings/local');
     renderLocalModels();
     // One warning for the whole listing, when the server's window is known and small.
     const low = (res.running || []).find(r => r.context && r.context < (localInfo.min_context || 8192));
-    if (low) showLocalAdvice(`${low.id} is loaded with a ${low.context.toLocaleString()}-token context. Raise it in the Ollama app (Settings → Context length) or start the server with OLLAMA_CONTEXT_LENGTH=${localInfo.recommended_context || 16384}.`);
+    if (low) showLocalAdvice(t('{m} is loaded with a {ctx}-token context. Raise it in the Ollama app (Settings → Context length) or start the server with OLLAMA_CONTEXT_LENGTH={rec}.', { m: low.id, ctx: low.context.toLocaleString(), rec: localInfo.recommended_context || 16384 }));
   }
   function showLocalAdvice(text) { const a = $('#localAdvice'); a.textContent = text; a.classList.remove('hidden'); }
 
@@ -2011,17 +2012,17 @@
     settings.models = res.models; renderModels(); refreshModelSelect();
     localInfo = await jget('/api/settings/local');
     renderLocalModels();
-    st.textContent = `Added ${name} — it is in the run selector. Press Test to load it once.`; st.className = 'tf-status ok';
+    st.textContent = t('Added {m} — it is in the run selector. Press Test to load it once.', { m: name }); st.className = 'tf-status ok';
   }
 
   async function testLocalModel(name, btn) {
     const st = $('#localStatus');
-    btn.disabled = true; st.textContent = `Calling ${name}… (the first call loads the model; this can take a minute)`; st.className = 'tf-status running';
+    btn.disabled = true; st.textContent = t('Calling {m}… (the first call loads the model; this can take a minute)', { m: name }); st.className = 'tf-status running';
     const res = await jsend('/api/settings/providers/local/test', { model_name: name });
     btn.disabled = false;
-    if (!res.ok) { st.textContent = res.error || 'Failed.'; st.className = 'tf-status err'; return; }
-    let msg = `Works — ${name} replied "${res.reply}".`;
-    if (res.context_length) msg += ` Loaded with a ${res.context_length.toLocaleString()}-token context.`;
+    if (!res.ok) { st.textContent = res.error || t('Failed.'); st.className = 'tf-status err'; return; }
+    let msg = t('Works — {m} replied "{reply}".', { m: name, reply: res.reply });
+    if (res.context_length) msg += t(' Loaded with a {ctx}-token context.', { ctx: res.context_length.toLocaleString() });
     st.textContent = msg; st.className = 'tf-status ok';
     if (res.context_advice) showLocalAdvice(res.context_advice); else $('#localAdvice').classList.add('hidden');
     if (localProbe) { localProbe.running = [{ id: name, context: res.context_length }]; renderLocalModels(); }
@@ -2048,12 +2049,12 @@
     const sel = $('#bmProvider');
     sel.innerHTML = bmCfg.providers.map(p => `<option value="${esc(p.id)}">${esc(p.display)}</option>`).join('');
     sel.value = bmCfg.provider;
-    $('#bmKey').value = ''; $('#bmKey').placeholder = bmCfg.masked_key ? `${bmCfg.masked_key}  (stored — type to replace)` : "paste the provider's key";
+    $('#bmKey').value = ''; $('#bmKey').placeholder = bmCfg.masked_key ? t('{mask}  (stored — type to replace)', { mask: bmCfg.masked_key }) : t("paste the provider's key");
     $('#bmUrl').value = bmCfg.url || ''; $('#bmAttr').value = bmCfg.attribution || ''; $('#bmFile').value = bmCfg.mbtiles || '';
     $('#bmCache').checked = bmCfg.cache !== false;
     bmRows();
     const mb = (bmCfg.cache_bytes || 0) / 1048576;
-    $('#bmStatus').textContent = (bmCfg.ready ? '' : bmCfg.problem + ' ') + `Cache: ${mb.toFixed(1)} MB.`;
+    $('#bmStatus').textContent = (bmCfg.ready ? '' : bmCfg.problem + ' ') + t('Cache: {mb} MB.', { mb: mb.toFixed(1) });
     $('#bmStatus').className = 'tf-status' + (bmCfg.ready ? '' : ' err');
   }
   $('#bmProvider').addEventListener('change', bmRows);
@@ -2066,12 +2067,12 @@
     if (res.error) { st.textContent = res.error; st.className = 'tf-status err'; return; }
     bmCfg = res; $('#bmKey').value = '';
     applyBasemap(res);
-    st.textContent = res.ready ? `Applied — ${res.display}.` : res.problem;
+    st.textContent = res.ready ? t('Applied — {name}.', { name: res.display }) : res.problem;
     st.className = 'tf-status ' + (res.ready ? 'ok' : 'err');
   });
   $('#bmClear').addEventListener('click', async () => {
     await jpost('/api/settings/basemap/clear_cache', {});
-    $('#bmStatus').textContent = 'Tile cache cleared.'; $('#bmStatus').className = 'tf-status ok';
+    $('#bmStatus').textContent = t('Tile cache cleared.'); $('#bmStatus').className = 'tf-status ok';
   });
 
   // ==================================================================
@@ -2104,7 +2105,7 @@
     const file = e.target.files[0];
     if (!file) return;
     const st = $('#skillStatus');
-    st.textContent = `Importing ${file.name}…`; st.className = 'tf-status running';
+    st.textContent = t('Importing {f}…', { f: file.name }); st.className = 'tf-status running';
     const r = await fetch('/api/skills/import', {
       method: 'POST', headers: { 'Content-Type': 'application/zip' }, body: file,
     });
@@ -2112,7 +2113,7 @@
     e.target.value = '';
     if (res.error) { st.textContent = res.error; st.className = 'tf-status err'; return; }
     skillsInfo = res; renderSkills();
-    st.textContent = `Installed “${res.name}”.`; st.className = 'tf-status ok';
+    st.textContent = t('Installed “{n}”.', { n: res.name }); st.className = 'tf-status ok';
   });
   $('#skillImportGo').addEventListener('click', async () => {
     const path = $('#skillImportPath').value.trim();
@@ -2121,40 +2122,40 @@
     const res = await jsend('/api/skills/import', { path });
     if (res.error) { st.textContent = res.error; st.className = 'tf-status err'; return; }
     skillsInfo = res; $('#skillImportPath').value = ''; renderSkills();
-    st.textContent = `Installed “${res.name}”.`; st.className = 'tf-status ok';
+    st.textContent = t('Installed “{n}”.', { n: res.name }); st.className = 'tf-status ok';
   });
 
   function renderSkills() {
     const host = $('#skillList');
     host.innerHTML = '';
     if (!skillsInfo.skills.length) {
-      host.innerHTML = `<div class="disc-empty">No skills found.</div>`;
+      host.innerHTML = `<div class="disc-empty">${t('No skills found.')}</div>`;
     }
     skillsInfo.skills.forEach(sk => {
       const row = document.createElement('div');
       row.className = 'skill-row';
       row.innerHTML =
-        `<input type="checkbox" ${sk.enabled ? 'checked' : ''} title="Make available to the agent" />
+        `<input type="checkbox" ${sk.enabled ? 'checked' : ''} title="${esc(t('Make available to the agent'))}" />
          <span class="skill-main">
            <span class="skill-name">${esc(sk.name)}</span>
            <div class="skill-desc">${esc(sk.description || 'no description')}</div>
          </span>
          <span class="skill-tags">
-           ${sk.always ? '<span class="skill-tag default">always on</span>' : ''}
-           <span class="skill-tag ${sk.source === 'user' ? 'user' : ''}">${sk.source}</span>
-           ${sk.resources ? `<span class="skill-tag">${sk.resources} files</span>` : ''}
-           <span class="skill-tag" title="Router ~${sk.router_tokens_est} tok, loaded on demand">
-             ${sk.always_tokens_est} tok always</span>
+           ${sk.always ? `<span class="skill-tag default">${t('always on')}</span>` : ''}
+           <span class="skill-tag ${sk.source === 'user' ? 'user' : ''}">${t(sk.source)}</span>
+           ${sk.resources ? `<span class="skill-tag">${t('{n} files', { n: sk.resources })}</span>` : ''}
+           <span class="skill-tag" title="${esc(t('Router ~{n} tok, loaded on demand', { n: sk.router_tokens_est }))}">
+             ${t('{n} tok always', { n: sk.always_tokens_est })}</span>
          </span>
-         <button class="mini-btn sk-edit">${sk.source === 'user' ? 'Edit' : 'View'}</button>
-         <a class="mini-btn" href="/api/skills/${encodeURIComponent(sk.name)}/export" download>Export</a>
-         ${sk.source === 'user' ? '<button class="mini-btn danger sk-del">Delete</button>'
-                                : '<button class="mini-btn sk-fork">Fork</button>'}`;
+         <button class="mini-btn sk-edit">${t(sk.source === 'user' ? 'Edit' : 'View')}</button>
+         <a class="mini-btn" href="/api/skills/${encodeURIComponent(sk.name)}/export" download>${t('Export')}</a>
+         ${sk.source === 'user' ? `<button class="mini-btn danger sk-del">${t('Delete')}</button>`
+                                : `<button class="mini-btn sk-fork">${t('Fork')}</button>`}`;
       const fork = row.querySelector('.sk-fork');
       if (fork) fork.addEventListener('click', async () => {
         skillsInfo = await jsend(`/api/skills/${encodeURIComponent(sk.name)}/fork`, {});
         renderSkills();
-        $('#skillStatus').textContent = `Copied into your workspace — your version now wins.`;
+        $('#skillStatus').textContent = t('Copied into your workspace — your version now wins.');
         $('#skillStatus').className = 'tf-status ok';
       });
       row.querySelector('input').addEventListener('change', async e => {
@@ -2172,7 +2173,7 @@
     });
     const total = skillsInfo.enabled_tokens_est || 0;
     $('#skillStatus').textContent = total
-      ? `Enabled skills cost ~${total} tokens on every call (routers and references load on demand, on top).`
+      ? t('Enabled skills cost ~{n} tokens on every call (routers and references load on demand, on top).', { n: total })
       : '';
     $('#skillStatus').className = 'tf-status';
   }
@@ -2187,17 +2188,17 @@
     $('#sePreview').classList.add('hidden');
     $('#seText').classList.remove('hidden');
     $('#seNote').textContent = sk.source === 'user'
-      ? `Your bundle at ${sk.path}. Changes apply on the next run — no restart.`
-      : `Read from ${sk.path} (${sk.source}). Saving forks the whole bundle into your workspace, where your copy wins.`;
+      ? t('Your bundle at {p}. Changes apply on the next run — no restart.', { p: sk.path })
+      : t('Read from {p} ({s}). Saving forks the whole bundle into your workspace, where your copy wins.', { p: sk.path, s: sk.source });
 
     // The bundle's other files — this is where the depth lives.
     const files = sk.files || [];
     $('#seFiles').innerHTML = files.length
-      ? `<span class="sef-label">bundle:</span> ` + files.slice(0, 40).map(f =>
+      ? `<span class="sef-label">${t('bundle:')}</span> ` + files.slice(0, 40).map(f =>
           `<a class="sef ${f.readable ? '' : 'bin'}" data-p="${esc(f.path)}">${esc(f.path)}</a>`).join('')
-        + (files.length > 40 ? `<span class="sef-label">+${files.length - 40} more</span>` : '')
+        + (files.length > 40 ? `<span class="sef-label">${t('+{n} more', { n: files.length - 40 })}</span>` : '')
         + ` <a class="sef sef-back" data-p="">SKILL.md</a>`
-      : `<span class="sef-label">no other files in this bundle</span>`;
+      : `<span class="sef-label">${t('no other files in this bundle')}</span>`;
     $$('#seFiles .sef').forEach(a => a.addEventListener('click', async () => {
       const p = a.dataset.p;
       if (!p) {   // back to the router
@@ -2221,7 +2222,7 @@
     if (res.error) { $('#skillStatus').textContent = res.error; $('#skillStatus').className = 'tf-status err'; return; }
     skillsInfo = res;
     renderSkills();
-    $('#skillStatus').textContent = `Saved to ${res.path}`;
+    $('#skillStatus').textContent = t('Saved to {p}', { p: res.path });
     $('#skillStatus').className = 'tf-status ok';
   });
   $('#skillNew').addEventListener('click', async () => {
@@ -2245,7 +2246,7 @@
     $('#maTokens').value = m.max_tokens;
     $('#maCostIn').value = (m.cost_per_m || [0, 0])[0];
     $('#maCostOut').value = (m.cost_per_m || [0, 0])[1];
-    $('#maStatus').textContent = `Editing “${m.display}”.`;
+    $('#maStatus').textContent = t('Editing “{n}”.', { n: m.display });
     $('#maStatus').className = 'tf-status';
   }
   $('#maReset').addEventListener('click', () => {
@@ -2264,13 +2265,13 @@
       cost_in: +$('#maCostIn').value || 0, cost_out: +$('#maCostOut').value || 0,
     };
     if (!payload.id || !payload.model_name) {
-      st.textContent = 'Id and API model name are both required.'; st.className = 'tf-status err'; return;
+      st.textContent = t('Id and API model name are both required.'); st.className = 'tf-status err'; return;
     }
     const res = await jsend('/api/settings/models', payload);
     if (res.error) { st.textContent = res.error; st.className = 'tf-status err'; return; }
     settings.models = res.models;
     renderModels(); refreshModelSelect();
-    st.textContent = `Saved “${payload.display || payload.id}”.`; st.className = 'tf-status ok';
+    st.textContent = t('Saved “{n}”.', { n: payload.display || payload.id }); st.className = 'tf-status ok';
   });
 
   // ---- memory ----
@@ -2283,14 +2284,14 @@
   $('#memSave').addEventListener('click', async () => {
     const st = $('#memStatus');
     await jsend('/api/memory', { text: $('#memText').value, enabled: $('#memEnabled').checked }, 'PUT');
-    st.textContent = 'Saved — this applies from the next run onwards.'; st.className = 'tf-status ok';
+    st.textContent = t('Saved — this applies from the next run onwards.'); st.className = 'tf-status ok';
   });
 
   async function rememberText(text) {
     const line = (text || '').trim();
     if (!line) return;
     await jsend('/api/memory/append', { text: line.slice(0, 500), section: 'Notes' });
-    addMsg({ kind: 'system', html: `Remembered — added to your global memory: <i>${esc(line.slice(0, 120))}</i>` });
+    addMsg({ kind: 'system', html: t('Remembered — added to your global memory: <i>{t}</i>', { t: esc(line.slice(0, 120)) }) });
   }
 
   // ==================================================================
@@ -2305,12 +2306,12 @@
   async function openLog() {
     if (!state.project) return;
     const res = await jget(`/api/projects/${state.project.id}/log`);
-    $('#journalTitle').textContent = `${state.project.name} — running log`;
+    $('#journalTitle').textContent = t('{p} — running log', { p: state.project.name });
     $('#journalPath').textContent = res.path || '';
     const body = $('#journalBody');
     body.innerHTML = res.markdown
       ? mdToHtml(res.markdown)
-      : `<div class="journal-empty">No compacted entries yet — one is written after each analysis run.${res.enabled ? '' : ' (Compaction is currently switched off.)'}</div>`;
+      : `<div class="journal-empty">${t('No compacted entries yet — one is written after each analysis run.')}${res.enabled ? '' : t(' (Compaction is currently switched off.)')}</div>`;
     journalModal.classList.remove('hidden');
     body.scrollTop = body.scrollHeight;
   }
@@ -2372,12 +2373,12 @@
   async function openJournal() {
     if (!state.project) return;
     const res = await jget(`/api/projects/${state.project.id}/journal`);
-    $('#journalTitle').textContent = `${state.project.name} — journal`;
+    $('#journalTitle').textContent = t('{p} — journal', { p: state.project.name });
     $('#journalPath').textContent = res.path || '';
     const body = $('#journalBody');
     body.innerHTML = res.markdown
       ? mdToHtml(res.markdown)
-      : `<div class="journal-empty">Nothing recorded yet — the journal is written when a run finishes.</div>`;
+      : `<div class="journal-empty">${t('Nothing recorded yet — the journal is written when a run finishes.')}</div>`;
     journalModal.classList.remove('hidden');
     body.scrollTop = body.scrollHeight;
   }
@@ -2389,10 +2390,10 @@
     const box = document.createElement('div');
     box.className = 'note-compose';
     box.innerHTML = `<textarea class="mem-text" style="min-height:90px;margin:12px 0 8px;width:100%"
-        placeholder="A decision, a client requirement, why an approach was dropped…"></textarea>`;
+        placeholder="${esc(t('A decision, a client requirement, why an approach was dropped…'))}"></textarea>`;
     const save = document.createElement('button');
     save.className = 'mini-btn primary';
-    save.textContent = 'Save note';
+    save.textContent = t('Save note');
     box.appendChild(save);
     body.appendChild(box);
     const ta = box.querySelector('textarea');
@@ -2424,19 +2425,19 @@
       return;
     }
     if (e.role === 'note') {
-      const m = addMsg({ kind: 'system', html: `<b>Note ·</b> ${esc(e.text || '')}` });
+      const m = addMsg({ kind: 'system', html: `<b>${t('Note ·')}</b> ${esc(e.text || '')}` });
       m.classList.add('msg-history');
       return;
     }
     const outs = e.outputs || [];
-    const chip = `<span class="run-chip ${e.success ? 'ok' : 'bad'}" data-run="${esc(e.run_id || '')}">${esc(e.run_id || 'failed')}</span>`;
+    const chip = `<span class="run-chip ${e.success ? 'ok' : 'bad'}" data-run="${esc(e.run_id || '')}">${esc(e.run_id || t('failed'))}</span>`;
     const stats = e.kind === 'tool'
-      ? esc(e.ask || 'Toolbox')
+      ? esc(e.ask || t('Toolbox'))
       : e.stopped
-        ? `stopped after ${e.rounds || 0} rounds · ${e.elapsed_s || 0}s`
+        ? t('stopped after {n} rounds · {t}s', { n: e.rounds || 0, t: e.elapsed_s || 0 })
         : e.success
-          ? `${e.rounds || 0} rounds · ${e.self_corrections || 0} self-corr · ${e.elapsed_s || 0}s`
-          : esc((e.error || 'run failed').slice(0, 140));
+          ? t('{n} rounds · {c} self-corr · {t}s', { n: e.rounds || 0, c: e.self_corrections || 0, t: e.elapsed_s || 0 })
+          : esc((e.error || t('run failed')).slice(0, 140));
     const files = outs.length
       ? `<div class="msg-files">${outs.map(f => `<a class="run-file" data-f="${esc(f)}">${esc(f)}</a>`).join(' · ')}</div>`
       : '';
@@ -2470,22 +2471,22 @@
     if (!entries.length) {
       addMsg({
         kind: 'system',
-        html: `Project <b>${esc(state.project.name)}</b> is open. Describe an analysis and press <b>Run</b>.`,
+        html: t('Project <b>{p}</b> is open. Describe an analysis and press <b>Run</b>.', { p: esc(state.project.name) }),
       });
       return;
     }
     const runs = entries.filter(e => e.role === 'agent').length;
-    addDivider(`earlier · ${runs} run${runs === 1 ? '' : 's'}`);
+    addDivider(t('earlier · {n} runs', { n: runs }));
     entries.forEach(renderHistoryEntry);
-    addDivider('now');
+    addDivider(t('now'));
     chatScroll.scrollTop = chatScroll.scrollHeight;
   }
 
   async function replayRun(runId) {
     if (!state.project || !runId) return;
     const res = await jget(`/api/projects/${state.project.id}/trace?run=${encodeURIComponent(runId)}`);
-    if (res.error) { addMsg({ kind: 'error', text: `No trace stored for ${runId}.` }); return; }
-    addDivider(`replay · ${runId}`);
+    if (res.error) { addMsg({ kind: 'error', text: t('No trace stored for {id}.', { id: runId }) }); return; }
+    addDivider(t('replay · {id}', { id: runId }));
     (res.events || []).forEach(ev => {
       if (ev.thought) traceAdd('thought', ev.thought);
       if (ev.action) traceAdd('action', null, `<code>${esc(ev.action)}</code>`);
@@ -2496,11 +2497,11 @@
       }
     });
     if (state.traceEl) {
-      closeTraceEl(state.traceEl, `Reasoning \u00b7 ${state.traceCount || 0} steps`);
+      closeTraceEl(state.traceEl, t('Reasoning · {n} steps', { n: state.traceCount || 0 }));
       state.traceEl = null;
     }
     if (res.code) { resetCode(); appendCode(res.code); switchTab('code'); }
-    addDivider('end of replay');
+    addDivider(t('end of replay'));
     chatScroll.scrollTop = chatScroll.scrollHeight;
   }
 
@@ -2511,7 +2512,7 @@
     state.models = await jget('/api/models');
     const sel = $('#modelSelect');
     if (!state.models.length) {
-      sel.innerHTML = `<option value="">No model configured</option>`;
+      sel.innerHTML = `<option value="">${t('No model configured')}</option>`;
       sel.disabled = true;
       return false;
     }
@@ -2522,6 +2523,27 @@
     return true;
   }
 
+  // Language: the server remembers the choice (shared by every browser on
+  // this machine); localStorage and the browser's own language fill in first.
+  function setLanguage(code, persist) {
+    window.I18N.set(code);
+    $$('#menubar [data-lang]').forEach(it => it.classList.toggle('active', it.dataset.lang === window.I18N.lang));
+    if (persist) jpost('/api/settings/ui', { language: window.I18N.lang }).catch(() => {});
+  }
+  $$('#menubar [data-lang]').forEach(it => it.addEventListener('click', e => {
+    e.stopPropagation();
+    $$('#menubar .menu').forEach(m => m.classList.remove('open'));
+    setLanguage(it.dataset.lang, true);
+  }));
+  document.addEventListener('gisclaw:lang', () => {
+    // Everything drawn by script, redrawn in the new language.
+    renderLegend(); renderCatalog(); resetCounters();
+    if (!state.running) setStatus(t('Idle'), '');
+    if (state.project) { $('#footHint').textContent = t(state.tree && state.tree.data.length ? 'Describe an analysis and press Run.' : 'Add data to this project to begin.'); }
+    if (!state.models.length) $('#modelSelect').innerHTML = `<option value="">${t('No model configured')}</option>`;
+    if (state.project && !state.running) loadHistory();
+  });
+
   async function init() {
     fetch('/api/version').then(r => r.json()).then(j => { appVersion = j.version || ''; }).catch(() => {});
     await loadViewerFollow();
@@ -2531,9 +2553,7 @@
     if (!haveModel) {
       addMsg({
         kind: 'error',
-        html: 'No model is available yet. Open <b>Tools → Settings</b> and paste an API key '
-            + '(the key is stored on the server, not in this browser), or point the '
-            + '<b>Local model</b> entry at a server of your own and fetch what it is serving.',
+        html: t('No model is available yet. Open <b>Settings → API keys</b> and paste an API key (the key is stored on the server, not in this browser), or point the <b>Local model</b> entry at a server of your own and fetch what it is serving.'),
       });
     }
     setTimeout(() => map.invalidateSize(), 60);

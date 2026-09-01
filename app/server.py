@@ -43,7 +43,7 @@ import shutil
 import sys
 from datetime import datetime
 
-APP_VERSION = "2.0.0-beta.4"
+APP_VERSION = "2.0.0-beta.5"
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -137,9 +137,19 @@ async def api_settings():
         "models": STORE.models_public(),
         "memory_enabled": STORE.memory_enabled(),
         "viewer_follow": STORE.viewer_follow(),
+        "language": STORE.language(),
         "settings_path": STORE.path,
         "memory_path": STORE.memory_path,
     }
+
+
+@app.post("/api/settings/ui")
+async def api_set_ui(request: Request):
+    """Interface preferences shared by every browser on this machine."""
+    body = await request.json()
+    if "language" in body:
+        STORE.set_language(str(body.get("language") or ""))
+    return {"language": STORE.language()}
 
 
 @app.post("/api/settings/viewer_follow")
@@ -1388,6 +1398,7 @@ async def api_run(request: Request):
     model_key = body.get("model") or ""
     pid = body.get("project_id", "")
     instruction = (body.get("instruction") or "").strip()
+    language = str(body.get("language") or STORE.language() or "en")
     if not pid:
         return JSONResponse({"error": "project_id required"}, status_code=400)
     if not instruction:
@@ -1399,7 +1410,7 @@ async def api_run(request: Request):
                                 status_code=400)
         model_key = ready[0]["id"]
     try:
-        run = runner.start_run(pid, model_key, instruction)
+        run = runner.start_run(pid, model_key, instruction, language=language)
     except runner.RunBusy as e:
         active = runner.active_run()
         return JSONResponse({"error": str(e), "busy": True,

@@ -827,3 +827,10 @@ body.col-resizing iframe, body.col-resizing .leaflet-container { pointer-events:
 /* Progress chatter inside the bubble, quieter than the reasoning itself. */
 .trace-system .trace-tag { color:var(--ink-muted); }
 .trace-system .trace-text { color:var(--ink-muted); font-style:italic; }
+
+/* Language menu, at the right end of the menu bar */
+.menu-lang { margin-left:auto; }
+.lang-btn { display:inline-flex; align-items:center; gap:6px; }
+.lang-btn svg { width:15px; height:15px; }
+.menu-drop-right { left:auto; right:0; }
+.menu-lang .menu-item.active { font-weight:600; color:var(--accent); }
