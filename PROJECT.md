@@ -14,13 +14,13 @@
 
 | 阶段 | 状态 | 进入下一阶段的条件 |
 |---|---|---|
-| v1.0.0 · Docker 本地 Web 应用，三语 README 与 PDF 手册，云端与本地模型 | ✅ 2026-09-01 发布 | — |
-| v2.0.0-beta · 三语界面 + uv 安装脚本 + Win/mac 安装包（未签名），在 `v2` 分支开发 | ⬜ | Win / mac 各一台干净机器从零跑通示例；三语界面自动化测试通过 |
-| v2.0.0 · 正式版 | ⬜ | beta 反馈处理完；三语 README / 手册 / 截图更新 |
-| 之后可选 · 代码签名与公证 | ⬜ 按需 | 视用户需求决定 |
+| v1.0.0 · Docker 本地 Web 应用 | ✅ 2026-09-01 | — |
+| v2.0.0 · macOS `.dmg` / Windows `.exe`、三语界面、本地模型面板、底图选择与缓存、测试套件 | ✅ 2026-09-01 发布（beta.1–7 在 Mac / Windows 实机验证后） | — |
+| 2.0.x · 收集用户反馈，修小问题 | 🟡 进行中 | 反馈稳定后决定 2.1 内容 |
+| 之后可选 · 代码签名与公证（Apple Developer） | ⬜ 按需 | 出现 MDM 用户或下载量说明值得 |
 
-**约定**：v1.1 / v1.2 不单独发版 —— 每次发版都要更新三语 README、三份 PDF 手册与截图；三语界面与安装包相互独立，可并行；uv 安装脚本本身就是安装包的构建步骤。
-**签名**：先发未签名版。macOS 15+ 需在「系统设置 → 隐私与安全性」点「仍要打开」，手册写清；通过终端脚本安装的文件不带 quarantine 属性，uv 路线在 mac 上无此提示。
+**约定**：每次发版 = 提交到 `v2` → 推私有库打 beta tag 出包实测 → 确认后 `v2` 推公开 `main` + 正式 tag（Actions 出包并发 Release）。文档只维护 README（三语），PDF 手册已废弃。
+**签名**：未签名。macOS 15+ 首次打开走「仍要打开」，README 已写明。
 
 **形态与边界**
 - 浏览器 UI ↔ FastAPI ↔ ReAct 单 agent ↔ Python GIS 沙箱；云端 provider + 本地 Ollama / LM Studio / vLLM。
@@ -46,28 +46,22 @@
 
 | # | 内容 | 何时要 |
 |---|---|---|
-| B1 | 开发环境统一：以本仓库为唯一开发树，本地容器改挂此处 | v2 开工前 |
-| B2 | Windows 测试机：没有实机则 Windows 侧靠 GitHub Actions 与 beta 用户验证 | E2 开工时 |
-| B3 | Intel Mac 是否支持：PyPI 上 rasterio 以 `macosx_10_13_x86_64` 标签查不到 wheel（可能只是标签太旧）。倾向不支持，Intel Mac 走 Docker | E3 出包前 |
+| B1 | 开发环境统一：以本仓库为唯一开发树，本地开发容器改挂此处（目前容器仍跑旧树） | 下次改动 agent 内核前 |
+| B2 | Intel Mac 是否支持：PyPI 的 rasterio 以 `macosx_10_13_x86_64` 标签查不到 wheel（可能只是标签太旧，用新标签再查）。倾向不支持，Intel Mac 走 Docker | 有人问起时 |
 
 ## 4. 决策记录 (ADR)
 
 | ID | 标题 | 状态 |
 |---|---|---|
 | ADR-002 | 界面多语言：静态字典 + `data-i18n`，后端消息「码 + 参数」，agent 文本跟随界面语言 | 决定 |
-| ADR-003 | 原生分发：完整 Python 环境随包 + 只冻结启动器 | 提案 |
+| ADR-003 | 原生分发：完整 Python 环境随包 + 只冻结启动器 | 决定 |
 
 ## 5. 下一步
 
 > `- [ ]` / `- [x]`（brief.sh 只抓未完成项）。
 
-- [x] E0：tag `v1.0.0` + GitHub Release + `CHANGELOG.md` + 版本号（2026-09-01）
-- [x] 开 `v2` 分支；E7 代码审视与加固（2026-09-01）
-- [ ] 决定 B1；`release` 只接 v1.0.x 修复
-- [ ] 确认 ADR-002 / ADR-003，状态改「决定」
-- [x] E1：三语界面，字典在 `app/web/i18n.js`（2026-09-01）
-- [x] E4：DISCLAIMER 加「原生模式没有容器隔离」（README 英文段已加；中 / 韩段随 v2 文档更新）
-- [x] 验证 wheel 路线：Linux 上 `install.sh` → 715 MB venv，测试套件全过（2026-09-01）
-- [ ] mac 实机：装 Release 里的 `.dmg`；看窗口是否出现、CJK 图标签、示例项目跑通、Local models 面板连本机 Ollama
-- [ ] Windows 实机或 Actions：`install.ps1` 未测
-- [ ] 三语 PDF 手册补「本地模型」一节
+- [x] v2.0.0 发布：安装包、三语界面、本地模型、底图、测试套件、README 重写（2026-09-01）
+- [ ] 截图换成 2.0 界面（现在是 1.0 的图加窗口框；缺语言按钮、Local models、Map 面板）
+- [ ] Help → About 与 DISCLAIMER 的中 / 韩文本（目前仅英文）
+- [ ] 决定 B1，改本地开发容器的挂载
+- [ ] 收集 2.0 反馈：Windows 上 WebView2 缺失时的回退是否顺畅、Ollama 上下文提示是否管用
