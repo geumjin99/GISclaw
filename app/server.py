@@ -43,7 +43,7 @@ import shutil
 import sys
 from datetime import datetime
 
-APP_VERSION = "2.0.0-beta.7"
+APP_VERSION = "2.0.0"
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)

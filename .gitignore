@@ -26,12 +26,6 @@ Thumbs.db
 .idea/
 .vscode/
 
-# LaTeX build artifacts
-docs/manual/*.aux
-docs/manual/*.log
-docs/manual/*.out
-docs/manual/*.toc
-docs/manual/*.tex
 
 # Local working notes — never publish
 CLAUDE.local.md
