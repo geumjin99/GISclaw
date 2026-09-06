@@ -88,6 +88,14 @@ window.I18N = (() => {
 I18N.register('zh', {
   'GIS Analyst Agent': 'GIS 分析助手',
   'Idle': '空闲', 'Running': '运行中', 'Stopping…': '正在停止…', 'Done': '完成', 'Stopped': '已停止', 'Failed': '失败',
+  'Stop after the current step': '在当前这一步结束后停止',
+  'Stopping — finishing the current step…': '正在停止 —— 等当前这一步结束…',
+  'Already stopping — press again to stop watching this run': '已在停止 —— 再按一次就不再跟随这次运行',
+  'Stopped watching this run. It ends on the server after the current step, and the result is kept in the project.':
+    '已不再跟随这次运行。它会在当前这一步结束后停止，结果仍会记入项目。',
+  'The run had already ended.': '这次运行已经结束了。',
+  'Could not reach the server to stop the run.': '无法连接服务器来停止这次运行。',
+  'Running in <b>{p}</b>': '<b>{p}</b> 正在运行', 'Open it': '打开',
   'Project': '项目', 'Tools': '工具', 'Settings': '设置', 'Help': '帮助',
   '＋ New project…': '＋ 新建项目…', '＋ Add data…': '＋ 添加数据…', 'Log (compacted)…': '日志（摘要）…',
   'Journal (full record)…': '实验记录（完整）…', 'Add note to journal…': '向记录添加备注…',
@@ -260,6 +268,14 @@ I18N.register('zh', {
 I18N.register('ko', {
   'GIS Analyst Agent': 'GIS 분석 에이전트',
   'Idle': '대기', 'Running': '실행 중', 'Stopping…': '중지하는 중…', 'Done': '완료', 'Stopped': '중지됨', 'Failed': '실패',
+  'Stop after the current step': '현재 단계가 끝나면 중지',
+  'Stopping — finishing the current step…': '중지하는 중 — 현재 단계를 마치는 중…',
+  'Already stopping — press again to stop watching this run': '이미 중지하는 중 — 다시 누르면 이 실행을 더 이상 보지 않습니다',
+  'Stopped watching this run. It ends on the server after the current step, and the result is kept in the project.':
+    '이 실행을 더 이상 보지 않습니다. 현재 단계가 끝나면 중지되며, 결과는 프로젝트에 기록됩니다.',
+  'The run had already ended.': '이 실행은 이미 끝났습니다.',
+  'Could not reach the server to stop the run.': '실행을 중지하기 위해 서버에 연결하지 못했습니다.',
+  'Running in <b>{p}</b>': '<b>{p}</b>에서 실행 중', 'Open it': '열기',
   'Project': '프로젝트', 'Tools': '도구', 'Settings': '설정', 'Help': '도움말',
   '＋ New project…': '＋ 새 프로젝트…', '＋ Add data…': '＋ 데이터 추가…', 'Log (compacted)…': '로그(요약)…',
   'Journal (full record)…': '저널(전체 기록)…', 'Add note to journal…': '저널에 메모 추가…',

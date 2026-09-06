@@ -271,12 +271,29 @@ def init_llm(cfg: dict):
     return llm
 
 
-def guard_engine(llm):
-    """Turn an engine's returned error text into an exception."""
+class RunStopped(Exception):
+    """Raised at a model call when the user has asked the run to stop."""
+
+
+def guard_engine(llm, cancel: threading.Event = None):
+    """Turn an engine's returned error text into an exception.
+
+    Also the one place Stop can land during a model call. The agent polls
+    `should_stop` between rounds and while a snippet runs, but a model that
+    takes a minute to answer would otherwise hold the run open for that whole
+    minute — which reads as a Stop button that does nothing.
+    """
     inner = llm.generate
 
     def generate(*a, **kw):
+        # Checked on both sides: before, so a stopped run does not pay for
+        # another request; after, so a Stop pressed while the model was
+        # thinking does not buy it one more round.
+        if cancel is not None and cancel.is_set():
+            raise RunStopped()
         r = inner(*a, **kw)
+        if cancel is not None and cancel.is_set():
+            raise RunStopped()
         text = (r or {}).get("text", "")
         if isinstance(text, str) and text.startswith(_ENGINE_ERROR_PREFIXES):
             raise ApiCallFailed(text)
@@ -455,6 +472,11 @@ def _run_agent(run: Run, cfg: dict):
     pid, model_key, instruction = run.pid, run.model, run.instruction
     recorder = None
     llm = None
+    # Pre-declared so a stop raised mid-call can still report what exists.
+    pdir = pred_dir = None
+    project_name = pid
+    steps_log = []
+    t0 = None
     SANDBOX_LOCK.acquire()
     try:
         pdir = paths.project_dir(pid)
@@ -478,7 +500,7 @@ def _run_agent(run: Run, cfg: dict):
         run.emit({"type": "status", "code": "Initializing {model}...", "params": {"model": cfg["display"]},
                   "content": f"Initializing {cfg['display']}...", "run_id": run.id})
 
-        llm = guard_engine(init_llm(cfg))
+        llm = guard_engine(init_llm(cfg), run.cancel)
 
         # Intent gate: a question about the project shouldn't become an analysis
         # run. The agent's finish-guard demands output files, so without this a
@@ -571,7 +593,7 @@ def _run_agent(run: Run, cfg: dict):
                               context_chars=cfg.get("context_chars") or 100_000)
 
         seen_outputs = set()
-        steps_log = []          # condensed step list for JOURNAL.md
+        del steps_log[:]        # condensed step list for JOURNAL.md
 
         def on_step(ev: dict):
             """Called by the agent after each round — push a live event."""
@@ -687,6 +709,17 @@ def _run_agent(run: Run, cfg: dict):
             "elapsed_s": round(elapsed, 1),
             "cost": cost_info,
         })
+    except RunStopped:
+        # Stop landed on a model call rather than between rounds. Same outcome
+        # as the agent's own stop: keep what was produced, record it, say so.
+        elapsed = round(time.time() - t0, 1) if t0 else 0.0
+        outputs = _collect_outputs(pdir, pred_dir) if pdir and pred_dir else []
+        log.info(f"[{pid}] run {run.id} stopped during a model call "
+                 f"({len(steps_log)} steps, {len(outputs)} outputs)")
+        if recorder:
+            recorder.log(f"stopped by the user after {elapsed}s")
+        _record_stopped(run, pdir, cfg, outputs, len(steps_log), elapsed,
+                        _cost_info(llm), steps_log, project_name)
     except ApiCallFailed as e:
         # Say what actually happened. A rejected key used to end as a run that
         # simply produced nothing, which reads like the software is broken.

@@ -232,6 +232,17 @@ button { font:inherit; color:inherit; }
 .chat-h-sub { font-size:11px; color:var(--ink-muted); }
 
 .chat-scroll { flex:1; min-height:0; overflow-y:auto; padding:14px 14px 20px; display:flex; flex-direction:column; gap:10px; scroll-behavior:smooth; }
+/* An analysis is running in a project other than the one on screen. */
+.run-banner { display:flex; align-items:center; gap:8px; margin:0 12px 8px; padding:7px 10px;
+  border:1px solid var(--line-soft); border-left:3px solid var(--warm); border-radius:6px;
+  background:var(--panel-sink); font-size:11.5px; color:var(--ink-muted); }
+.run-banner b { color:var(--ink); font-weight:600; }
+.run-dot { width:7px; height:7px; border-radius:50%; background:var(--warm); flex:none;
+  animation:run-pulse 1.4s ease-in-out infinite; }
+@keyframes run-pulse { 0%,100%{opacity:1;} 50%{opacity:.25;} }
+.banner-link { margin-left:auto; border:1px solid var(--line-soft); background:var(--bg);
+  border-radius:5px; padding:3px 9px; font:inherit; font-size:11px; color:var(--ink); cursor:pointer; }
+.banner-link:hover { border-color:var(--warm); color:var(--warm); }
 .msg { background:var(--bg); border:1px solid var(--line-soft); border-radius:7px; padding:9px 12px 11px; font-size:12.5px; line-height:1.6; animation:msg-in .35s ease-out; }
 @keyframes msg-in { from{opacity:0;transform:translateY(4px);} to{opacity:1;transform:translateY(0);} }
 .msg-meta { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; }

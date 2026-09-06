@@ -2,6 +2,10 @@
 
 The paper's reference implementation stays on the `paper-v2` branch (tag `v2-gsis-submission`).
 
+## 2.0.1 — 2026-09-06
+
+- Some fixes.
+
 ## 2.0.0 — 2026-09-01
 
 - Stop ends the run: the current step is interrupted, the run is recorded as stopped.

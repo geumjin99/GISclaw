@@ -643,10 +643,18 @@
     });
   }
 
+  // Opening another project while one runs is allowed: the run lives on the
+  // server, not in this view. The stream is dropped here and rejoined by
+  // attachActiveRun() on the way back — it replays every event from the start,
+  // so nothing of the reasoning is lost by looking away.
   async function selectProject(id) {
-    if (state.running) return;
     const pj = allProjects.find(p => p.id === id);
     if (!pj) return;
+    if (state.project && state.project.id === id) return;
+    if (state.running) {
+      state.runId++;                    // let the stream reader stand down
+      state.running = false; state.stopping = false; stopTimer();
+    }
     state.project = { id: pj.id, name: pj.name };
     state.tree = await jget(`/api/projects/${id}/tree`);
     $('#chatTaskTitle').textContent = pj.name;
@@ -660,7 +668,36 @@
     resetCounters(); resetCode(); resetImageView();
     await loadHistory();          // the conversation survives reloads and restarts
     setTimeout(() => map.invalidateSize(), 30);
-    attachActiveRun();            // and so does a run that was in progress
+    await attachActiveRun();      // and so does a run that was in progress
+    refreshRunBanner();           // …or says where it is, if it is elsewhere
+  }
+
+  // One run at a time, and it belongs to a project. When that project is not
+  // the one on screen, say where it is — otherwise Run is simply dead and the
+  // interface never explains why.
+  let bannerTimer = null;
+  async function refreshRunBanner() {
+    const banner = $('#runBanner');
+    let active = null;
+    try { active = (await jget('/api/run/active')).active; } catch (e) {}
+    const elsewhere = active && !active.done && state.project
+                      && active.project_id !== state.project.id;
+    $('#startBtn').disabled = !state.project || state.running || !!elsewhere;
+    if (!elsewhere) {
+      banner.classList.add('hidden');
+      banner.innerHTML = '';
+      if (bannerTimer) { clearInterval(bannerTimer); bannerTimer = null; }
+      return;
+    }
+    const pj = allProjects.find(p => p.id === active.project_id);
+    const name = pj ? pj.name : active.project_id;
+    banner.classList.remove('hidden');
+    banner.innerHTML = '<span class="run-dot"></span>'
+      + `<span>${t('Running in <b>{p}</b>', { p: esc(name) })}${active.stopping ? ' · ' + t('Stopping…') : ''}</span>`
+      + `<button class="banner-link" type="button">${t('Open it')}</button>`;
+    banner.querySelector('.banner-link').addEventListener('click', () => selectProject(active.project_id));
+    // That run ends without this page hearing about it, so check back.
+    if (!bannerTimer) bannerTimer = setInterval(refreshRunBanner, 4000);
   }
 
   async function refreshTree() {
@@ -951,6 +988,15 @@
   // ==================================================================
   // Run (SSE over POST)
   // ==================================================================
+  // Stop / Stopping…, and the second press that stops watching.
+  function setStopLabel(stopping) {
+    const b = $('#stopBtn');
+    b.disabled = false;
+    b.querySelector('span').textContent = stopping ? t('Stopping…') : t('Stop');
+    b.title = stopping ? t('Already stopping — press again to stop watching this run')
+                       : t('Stop after the current step');
+  }
+
   function resetRunUI() {
     // Counters/code/image reset per run — but the conversation is a record now,
     // so it is never wiped here; new turns are appended below the history.
@@ -971,6 +1017,7 @@
   function beginRunUI(instruction) {
     const rid = ++state.runId;
     state.running = true;
+    state.stopping = false;
     state.serverRun = null;
     state.traceEl = null; state.traceCount = 0;
     // Status lines that arrive after a bubble has been folded belong to no
@@ -981,7 +1028,7 @@
     resetRunUI();
     if (instruction) addMsg({ kind: 'user', text: instruction });
     $('#startBtn').classList.add('hidden'); $('#stopBtn').classList.remove('hidden');
-    $('#stopBtn').disabled = false;
+    setStopLabel(false);
     setStatus(t('Running'), 'running'); startTimer();
     return rid;
   }
@@ -1054,7 +1101,7 @@
     state.serverRun = run.run_id;
     state.startedAt = Math.round(run.started * 1000);
     addMsg({ kind: 'system', text: t('Rejoined the run in progress ({id}).', { id: run.run_id }) });
-    if (run.stopping) { setStatus(t('Stopping…'), 'running'); $('#stopBtn').disabled = true; }
+    if (run.stopping) { state.stopping = true; setStopLabel(true); setStatus(t('Stopping…'), 'running'); }
     let resp;
     try { resp = await fetch(`/api/run/${encodeURIComponent(run.run_id)}/stream`); }
     catch (e) { finishRun(rid, false, t('Network error')); return; }
@@ -1163,9 +1210,10 @@
     if (rid !== state.runId) return;
     stopTimer();
     state.running = false;
+    state.stopping = false;
     state.serverRun = null;
     $('#startBtn').classList.remove('hidden'); $('#stopBtn').classList.add('hidden');
-    $('#stopBtn').disabled = false;
+    setStopLabel(false);
     setStatus(t(success ? 'Done' : (done && done.stopped ? 'Stopped' : 'Failed')), success ? 'done' : '');
     if (done && done.answered) {
       setStatus(t('Idle'), '');
@@ -1182,6 +1230,7 @@
       addMsg({ kind: 'error', text: errText });
     }
     refreshTree();
+    refreshRunBanner();
   }
 
   $('#startBtn').addEventListener('click', runAnalysis);
@@ -1192,17 +1241,38 @@
       runAnalysis();
     }
   });
+  // The run ends on the server, not here: the model call is cut short, code
+  // executing in the sandbox is interrupted, and the run records itself as
+  // stopped — which arrives back as `done`. Between the press and that event
+  // there is the current step, so the button says so instead of going quiet.
   $('#stopBtn').addEventListener('click', async () => {
     if (!state.running) return;
-    // The run ends on the server, not here: the current step is interrupted
-    // and the run records itself as stopped, which then arrives as `done`.
-    $('#stopBtn').disabled = true;
-    setStatus(t('Stopping…'), 'running');
-    if (state.serverRun) {
-      try { await jpost(`/api/run/${encodeURIComponent(state.serverRun)}/cancel`, {}); } catch (e) {}
-    } else {
+    if (state.stopping) {
+      // Pressed again: stop watching. The server was already told, and the run
+      // writes its record either way.
+      state.runId++; state.running = false; state.stopping = false; stopTimer();
+      $('#startBtn').classList.remove('hidden'); $('#stopBtn').classList.add('hidden');
+      setStopLabel(false);
+      setStatus(t('Stopped'), '');
+      addMsg({ kind: 'system', text: t('Stopped watching this run. It ends on the server after the current step, and the result is kept in the project.') });
+      refreshRunBanner();
+      return;
+    }
+    if (!state.serverRun) {
       // No server id yet — nothing to address. Drop the stream.
       finishRun(state.runId, false, t('Stopped.'));
+      return;
+    }
+    state.stopping = true;
+    setStopLabel(true);
+    setStatus(t('Stopping — finishing the current step…'), 'running');
+    try {
+      const r = await jpost(`/api/run/${encodeURIComponent(state.serverRun)}/cancel`, {});
+      if (r && r.ok === false) finishRun(state.runId, false, t('The run had already ended.'));
+    } catch (e) {
+      state.stopping = false;
+      setStopLabel(false);
+      addMsg({ kind: 'error', text: t('Could not reach the server to stop the run.') });
     }
   });
   // "Clear" resets the view, then restores the conversation from disk — the
@@ -2553,9 +2623,16 @@
     // Everything drawn by script, redrawn in the new language.
     renderLegend(); renderCatalog(); resetCounters();
     if (!state.running) setStatus(t('Idle'), '');
-    if (state.project) { $('#footHint').textContent = t(state.tree && state.tree.data.length ? 'Describe an analysis and press Run.' : 'Add data to this project to begin.'); }
+    if (state.project) {
+      $('#footHint').textContent = t(state.tree && state.tree.data.length ? 'Describe an analysis and press Run.' : 'Add data to this project to begin.');
+      // The title carries data-i18n, so the language switch had just replaced
+      // the open project's name with "No project selected".
+      $('#chatTaskTitle').textContent = state.project.name;
+    }
     if (!state.models.length) $('#modelSelect').innerHTML = `<option value="">${t('No model configured')}</option>`;
     if (state.project && !state.running) loadHistory();
+    if (state.running) setStopLabel(state.stopping);
+    refreshRunBanner();
   });
 
   async function init() {
@@ -2570,6 +2647,7 @@
         html: t('No model is available yet. Open <b>Settings → API keys</b> and paste an API key (the key is stored on the server, not in this browser), or point the <b>Local model</b> entry at a server of your own and fetch what it is serving.'),
       });
     }
+    refreshRunBanner();
     setTimeout(() => map.invalidateSize(), 60);
   }
   init();
